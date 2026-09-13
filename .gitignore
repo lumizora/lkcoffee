@@ -4,3 +4,4 @@ recordings/
 native/LocationHelper.app/
 *.log
 .DS_Store
+.worktrees/
