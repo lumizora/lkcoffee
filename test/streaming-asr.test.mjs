@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 import test from "node:test";
 import { VolcengineStreamingASR } from "../src/asr/streaming.js";
 
@@ -83,6 +83,23 @@ test("accepts uncompressed streaming responses", async () => {
   const session = await asr.start();
   session.write(Buffer.from("pcm"));
   assert.equal((await session.finish()).text, "确认下单");
+});
+
+test("encodes Uint8Array microphone frames as raw PCM", async () => {
+  let socket;
+  const asr = new VolcengineStreamingASR({
+    apiKey: "test-key",
+    connect: () => {
+      socket = new FakeSocket();
+      return socket;
+    },
+  });
+
+  const session = await asr.start();
+  session.write(new Uint8Array([1, 2, 3]));
+
+  assert.deepEqual(gunzipSync(socket.sent[1].subarray(12)), Buffer.from([1, 2, 3]));
+  await session.finish().catch(() => {});
 });
 
 test("rejects a final response without speech", async () => {

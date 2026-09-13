@@ -45,8 +45,9 @@ class Session {
 
   write(chunk) {
     if (this.ended) throw new Error("语音识别已结束");
-    if (!chunk.length) return;
-    this.socket.send(audioRequest(this.sequence++, chunk));
+    const audio = Buffer.from(chunk);
+    if (!audio.length) return;
+    this.socket.send(audioRequest(this.sequence++, audio));
   }
 
   finish() {
