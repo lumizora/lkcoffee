@@ -29,8 +29,8 @@ Space 录音/停止  Enter 停止并发送  T 重试识别  D 删除录音  Q �
 ### 1. 安装依赖
 
 ```bash
-brew install ffmpeg
-npm install
+brew install bun ffmpeg
+bun install
 cp .env.example .env
 ```
 
@@ -62,7 +62,7 @@ TTS_RESOURCE_ID=seed-tts-2.0
 ### 3. 启动
 
 ```bash
-npm start
+bun run start
 ```
 
 首次启动会请求 macOS 定位权限。允许后可直接说“帮我看附近有哪些门店”。
@@ -112,7 +112,7 @@ AUDIO_DEVICE=2
 ## 开发
 
 ```bash
-npm test
+bun test
 ```
 
 当前版本是 macOS 终端 MVP：依赖 FFmpeg `avfoundation` 输入，订单与支付由瑞幸 MCP 实时处理。
