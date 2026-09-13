@@ -17,6 +17,7 @@ Space 录音/停止  Enter 停止并发送  T 重试识别  D 删除录音  Q �
 | | 能力 |
 | --- | --- |
 | 🎙 | 本地麦克风录音与豆包极速 ASR 转写 |
+| 🔊 | 豆包双向流式 TTS，回复同时持续播报 |
 | 📍 | 首次启动申请 macOS 定位权限，查询附近门店 |
 | ☕ | 语音查询门店、商品、规格与优惠 |
 | 🧾 | 预览最终到手价；明确确认后创建自取订单 |
@@ -47,6 +48,13 @@ VOLCENGINE_RESOURCE_ID=volc.seedasr.sauc.duration
 ```ini
 DEEPSEEK_API_KEY=...
 LUCKIN_MCP_TOKEN=...
+```
+
+如需把瑞幸回复播报出来，在豆包流式语音合成 2.0 控制台创建或选择音色后填写：
+
+```ini
+TTS_SPEAKER=音色_ID
+TTS_RESOURCE_ID=seed-tts-2.0
 ```
 
 `LUCKIN_MCP_TOKEN` 可在 [瑞幸 MCP 开放平台](https://open.lkcoffee.com/mcp) 登录后创建。不要提交 `.env`。

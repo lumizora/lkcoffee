@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { StreamRecorder } from "./recorder.js";
 import { VolcengineStreamingASR } from "./asr/streaming.js";
+import { VolcengineStreamingTTS } from "./tts/streaming.js";
 import { CoffeeAgent } from "./coffee-agent.js";
 import * as ui from "./ui.js";
 import { locate } from "./location.js";
@@ -8,6 +9,7 @@ import { locate } from "./location.js";
 if (process.platform !== "darwin") throw new Error("当前 MVP 仅支持 macOS（FFmpeg avfoundation）");
 if (!process.env.VOLCENGINE_API_KEY) throw new Error("缺少 VOLCENGINE_API_KEY");
 if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status !== 0) throw new Error("未找到 ffmpeg，请先安装：brew install ffmpeg");
+if (process.env.TTS_SPEAKER && spawnSync("ffplay", ["-version"], { stdio: "ignore" }).status !== 0) throw new Error("未找到 ffplay，请先安装：brew install ffmpeg");
 if (!process.stdin.isTTY) throw new Error("请在交互式终端运行 npm start");
 
 let session = null;
@@ -18,6 +20,7 @@ const recorder = new StreamRecorder({
   onError: (error) => console.error(`❌ ${error.message}`),
 });
 const asr = new VolcengineStreamingASR({ apiKey: process.env.VOLCENGINE_API_KEY, resourceId: process.env.VOLCENGINE_RESOURCE_ID, url: process.env.VOLCENGINE_ASR_URL });
+const tts = process.env.TTS_SPEAKER ? new VolcengineStreamingTTS({ apiKey: process.env.VOLCENGINE_API_KEY, speaker: process.env.TTS_SPEAKER, resourceId: process.env.TTS_RESOURCE_ID, url: process.env.TTS_URL }) : null;
 let coffee = null;
 let busy = false;
 
@@ -43,6 +46,7 @@ async function sendResult(result) {
   if (coffee) {
     const reply = await coffee.ask(result.text);
     ui.message("coffee", reply.text);
+    if (tts) void tts.speak(reply.text).catch((error) => ui.status("warning", error.message));
     if (reply.qrCodeUrl) {
       ui.qr(reply.qrCodeUrl);
       ui.openPayment(reply.qrCodeUrl);
@@ -75,12 +79,14 @@ async function retryRecognition() {
 }
 
 async function startRecording() {
+  tts?.stop();
   session = await asr.start(ui.partial);
   await recorder.start();
   ui.status("recording", "正在录音 · 实时识别中，Space 停止，Enter 发送");
 }
 
 async function quit() {
+  tts?.stop();
   if (recorder.isRecording()) {
     ui.status("thinking", "正在保存录音...");
     try { await stopRecording(); } catch (error) { ui.status("error", error.message); }
