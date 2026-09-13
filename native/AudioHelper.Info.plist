@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleExecutable</key>
+  <string>AudioHelper</string>
+  <key>CFBundleIdentifier</key>
+  <string>com.alwaysmissly.voice-coffee.audio</string>
+  <key>CFBundleName</key>
+  <string>Voice Coffee Audio</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Voice Coffee 需要使用麦克风完成语音点单。</string>
+</dict>
+</plist>
