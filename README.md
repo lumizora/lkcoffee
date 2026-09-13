@@ -95,17 +95,7 @@ bun run start
 
 ## 麦克风与定位排查
 
-默认设备不正确时，先列出 macOS 音频输入设备：
-
-```bash
-ffmpeg -f avfoundation -list_devices true -i ""
-```
-
-将设备编号填到 `.env`：
-
-```ini
-AUDIO_DEVICE=2
-```
+首次启动会请求麦克风权限。输入设备由原生 AudioHelper 枚举和管理，不再依赖 FFmpeg 或 `AUDIO_DEVICE` 编号。
 
 定位失败时，前往“系统设置 → 隐私与安全性 → 定位服务”，允许 **Voice Coffee** 使用定位；也可以直接说出商圈或门店名。
 
@@ -115,4 +105,4 @@ AUDIO_DEVICE=2
 bun test
 ```
 
-当前版本是 macOS 终端 MVP：依赖 FFmpeg `avfoundation` 输入，订单与支付由瑞幸 MCP 实时处理。
+当前版本是 macOS 终端 MVP：通过原生 AudioHelper 采集麦克风，订单与支付由瑞幸 MCP 实时处理。

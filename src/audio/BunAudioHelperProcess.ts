@@ -62,13 +62,14 @@ export class BunAudioHelperProcess {
 
   async stop(): Promise<void> {
     if (!this.#process) return;
+    const process = this.#process;
     this.#stopping = true;
     try {
       await this.request("shutdown");
     } catch {
-      this.#process.kill();
+      process.kill();
     }
-    await this.#process.exited;
+    await process.exited;
   }
 
   async #readControl(stream: ReadableStream<Uint8Array>): Promise<void> {

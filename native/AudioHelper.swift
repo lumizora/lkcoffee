@@ -191,7 +191,7 @@ final class AudioHelper {
   private func hasInput(_ id: AudioDeviceID) -> Bool {
     var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreamConfiguration, mScope: kAudioDevicePropertyScopeInput, mElement: kAudioObjectPropertyElementMain)
     var size: UInt32 = 0
-    return AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr && size > UInt32(MemoryLayout<AudioBufferList>.size)
+    return AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr && size >= UInt32(MemoryLayout<AudioBufferList>.size)
   }
 
   private func deviceName(_ id: AudioDeviceID) -> String {
