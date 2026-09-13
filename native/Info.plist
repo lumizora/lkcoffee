@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleExecutable</key><string>LocationHelper</string>
+  <key>CFBundleIdentifier</key><string>com.alwaysmissly.voice-coffee.location</string>
+  <key>CFBundleName</key><string>Voice Coffee</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>NSLocationUsageDescription</key><string>用于查询附近的瑞幸门店。</string>
+</dict></plist>

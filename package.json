@@ -1,0 +1,16 @@
+{
+  "name": "voice-recorder-spike",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prestart": "npm run build:location",
+    "start": "node --env-file-if-exists=.env src/index.js",
+    "build:location": "zsh scripts/build-location.sh",
+    "test": "node --test test/*.test.mjs",
+    "test:asr": "node --env-file-if-exists=.env scripts/test-asr.js"
+  },
+  "dependencies": {
+    "openai": "^7.15.0"
+  },
+  "license": "MIT"
+}
