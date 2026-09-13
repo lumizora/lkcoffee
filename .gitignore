@@ -3,3 +3,4 @@ node_modules/
 recordings/
 native/LocationHelper.app/
 *.log
+.DS_Store
