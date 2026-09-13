@@ -93,3 +93,30 @@ test("coffee agent shows the final price without creating when the user asks for
   assert.equal(preview.text, "实际到手价为13.9元。");
   assert.equal(orderCreated, false);
 });
+
+test("coffee agent executes an explicit order cancellation", async () => {
+  let cancelled = false;
+  const client = { chat: { completions: { create: async (request) => {
+    if (request.messages.at(-1).role === "tool") {
+      return { choices: [{ message: { content: "订单已取消。" } }] };
+    }
+    return { choices: [{ message: { tool_calls: [{
+      id: "cancel-1", type: "function", function: { name: "cancelOrder", arguments: '{"orderId":"order-1"}' },
+    }] } }] };
+  } } } };
+  const fetch = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    if (request.method === "tools/list") {
+      const tools = [{ name: "cancelOrder", description: "取消订单", inputSchema: { type: "object", properties: { orderId: { type: "string" } } } }];
+      return new Response(JSON.stringify({ result: { tools } }));
+    }
+    assert.equal(request.params.name, "cancelOrder");
+    assert.equal(request.params.arguments.orderId, "order-1");
+    cancelled = true;
+    return new Response(JSON.stringify({ result: { content: [{ type: "text", text: "取消成功" }] } }));
+  };
+  const agent = new CoffeeAgent({ client, fetch, token: "test-token" });
+
+  assert.equal((await agent.ask("取消这个订单")).text, "订单已取消。");
+  assert.equal(cancelled, true);
+});
