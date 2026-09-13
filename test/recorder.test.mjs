@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { Recorder } from "../src/recorder.js";
+import { Recorder, StreamRecorder } from "../src/recorder.js";
 
 test("recorder captures 16 kHz mono WAV and closes it with ffmpeg q", async () => {
   const dir = await mkdtemp(join(tmpdir(), "voice-recorder-"));
@@ -47,4 +47,26 @@ test("recorder clears its recording state when ffmpeg exits before stop", async 
   assert.equal(recorder.isRecording(), false);
   assert.deepEqual(errors, ["FFmpeg 启动失败（退出码 1）"]);
   await rm(dir, { recursive: true, force: true });
+});
+
+test("stream recorder forwards PCM chunks and keeps them for retry", async () => {
+  const child = new EventEmitter();
+  child.stdout = new EventEmitter();
+  child.stdin = { write: () => queueMicrotask(() => child.emit("close", 0)) };
+  let command;
+  const chunks = [];
+  const recorder = new StreamRecorder({
+    device: "2",
+    spawn: (...args) => { command = args; return child; },
+    onData: (chunk) => chunks.push(chunk),
+  });
+
+  await recorder.start();
+  child.stdout.emit("data", Buffer.from("pcm"));
+  const audio = await recorder.stop();
+
+  assert.equal(command[0], "ffmpeg");
+  assert.deepEqual(command[1].slice(-3), ["-f", "s16le", "pipe:1"]);
+  assert.deepEqual(chunks, [Buffer.from("pcm")]);
+  assert.deepEqual(audio, Buffer.from("pcm"));
 });

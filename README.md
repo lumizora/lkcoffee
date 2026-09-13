@@ -2,7 +2,7 @@
 
 > 在终端里开口说，完成附近门店查询、咖啡点单与订单查询。
 
-Voice Coffee 是一个 macOS 语音点单实验：本地录音经豆包 ASR 转写，再由 DeepSeek 驱动瑞幸 MCP 完成对话与下单。
+Voice Coffee 是一个 macOS 语音点单实验：本地麦克风音频经豆包流式语音识别 2.0 实时转写，再由 DeepSeek 驱动瑞幸 MCP 完成对话与下单。
 
 ```text
 ☕ Voice Coffee  ·  语音点单助手
@@ -39,6 +39,7 @@ cp .env.example .env
 
 ```ini
 VOLCENGINE_API_KEY=...
+VOLCENGINE_RESOURCE_ID=volc.seedasr.sauc.duration
 ```
 
 如需语音点瑞幸，再填写：
@@ -104,7 +105,6 @@ AUDIO_DEVICE=2
 
 ```bash
 npm test
-npm run test:asr -- path/to/test.wav
 ```
 
 当前版本是 macOS 终端 MVP：依赖 FFmpeg `avfoundation` 输入，订单与支付由瑞幸 MCP 实时处理。
