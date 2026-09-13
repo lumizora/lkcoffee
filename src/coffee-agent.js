@@ -40,12 +40,18 @@ export class CoffeeAgent {
       this.messages.push(message);
       for (const call of message.tool_calls) {
         const result = await this.callTool(call.function.name, JSON.parse(call.function.arguments));
+        const cancelReason = call.function.name === "cancelOrder" && findCancelFailure(result);
         if (call.function.name === "previewOrder") this.previewed = true;
         if (call.function.name === "createOrder") {
           this.previewed = false;
           qrCodeUrl = findQrCode(result);
         }
         this.messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+        if (cancelReason) {
+          const content = `取消订单失败：${cancelReason}`;
+          this.messages.push({ role: "assistant", content });
+          return { text: content };
+        }
       }
     }
     throw new Error("瑞幸助手调用次数过多");
@@ -88,6 +94,20 @@ function findQrCode(value) {
 
 function asksForPrice(text) {
   return /实际.*(?:到手价|价格|价)|最终(?:到手价|价格|价|应付)|到手价|看看?(?:实际|最终)?价格/.test(text);
+}
+
+function findCancelFailure(value) {
+  if (!value || typeof value !== "object") return undefined;
+  if (value.success === false) return typeof value.msg === "string" ? value.msg : "瑞幸未说明原因";
+  if (Array.isArray(value)) return value.map(findCancelFailure).find(Boolean);
+  for (const item of Object.values(value)) {
+    if (typeof item === "string") {
+      try { const reason = findCancelFailure(JSON.parse(item)); if (reason) return reason; } catch {}
+    } else {
+      const reason = findCancelFailure(item);
+      if (reason) return reason;
+    }
+  }
 }
 
 function findValue(value, key) {

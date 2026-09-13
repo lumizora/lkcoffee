@@ -120,3 +120,26 @@ test("coffee agent executes an explicit order cancellation", async () => {
   assert.equal((await agent.ask("取消这个订单")).text, "订单已取消。");
   assert.equal(cancelled, true);
 });
+
+test("coffee agent reports the MCP cancellation failure reason", async () => {
+  let modelCalls = 0;
+  const client = { chat: { completions: { create: async () => {
+    modelCalls += 1;
+    if (modelCalls === 1) return { choices: [{ message: { tool_calls: [{
+      id: "cancel-1", type: "function", function: { name: "cancelOrder", arguments: '{"orderId":"order-1"}' },
+    }] } }] };
+    return { choices: [{ message: { content: "取消失败。" } }] };
+  } } } };
+  const fetch = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    if (request.method === "tools/list") {
+      const tools = [{ name: "cancelOrder", description: "取消订单", inputSchema: { type: "object", properties: { orderId: { type: "string" } } } }];
+      return new Response(JSON.stringify({ result: { tools } }));
+    }
+    return new Response(JSON.stringify({ result: { content: [{ type: "text", text: '{"code":1000,"msg":"订单已制作，无法取消","success":false}' }] } }));
+  };
+  const agent = new CoffeeAgent({ client, fetch, token: "test-token" });
+
+  assert.equal((await agent.ask("取消这个订单")).text, "取消订单失败：订单已制作，无法取消");
+  assert.equal(modelCalls, 1);
+});
