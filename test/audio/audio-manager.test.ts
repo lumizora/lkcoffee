@@ -12,10 +12,9 @@ class FakeHelper {
   async start() {}
   async stop() {}
   onEvent(_listener: (event: AudioEvent) => void) { return () => {}; }
-  async request(type: AudioCommandType, payload?: unknown) {
+  async request<T = unknown>(type: AudioCommandType, payload?: unknown): Promise<T> {
     this.requests.push({ type, payload });
-    if (type === "get_permission") return "granted";
-    return null;
+    return (type === "get_permission" ? "granted" : null) as T;
   }
   emit(chunk: Uint8Array) { this.#controller.enqueue(chunk); }
 }
@@ -35,9 +34,8 @@ class RestartingHelper {
   async start() { this.#starts++; }
   async stop() {}
   onEvent(_listener: (event: AudioEvent) => void) { return () => {}; }
-  async request(type: AudioCommandType) {
-    if (type === "get_permission") return "granted";
-    return null;
+  async request<T = unknown>(type: AudioCommandType): Promise<T> {
+    return (type === "get_permission" ? "granted" : null) as T;
   }
 }
 

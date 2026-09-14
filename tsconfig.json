@@ -3,7 +3,18 @@
     "target": "ESNext",
     "module": "Preserve",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
     "strict": true,
-    "types": ["bun-types"]
-  }
+    "types": [
+      "bun"
+    ]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

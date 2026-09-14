@@ -4,13 +4,15 @@ import test from "node:test";
 import { VolcengineStreamingTTS } from "../src/tts/streaming";
 
 class FakeSocket extends EventEmitter {
+  sent: Buffer[] = [];
+  closed = false;
+
   constructor() {
     super();
-    this.sent = [];
     queueMicrotask(() => this.emit("open"));
   }
 
-  send(data) {
+  send(data: Uint8Array) {
     const frame = Buffer.from(data);
     this.sent.push(frame);
     const event = frame.readInt32BE(4);
@@ -25,12 +27,12 @@ class FakeSocket extends EventEmitter {
   close() {}
 }
 
-function frameSessionId(frame) {
+function frameSessionId(frame: Buffer) {
   const size = frame.readUInt32BE(8);
   return frame.subarray(12, 12 + size).toString();
 }
 
-function eventResponse(event, sessionId = "") {
+function eventResponse(event: number, sessionId = "") {
   const session = Buffer.from(sessionId);
   const prefix = Buffer.alloc(8 + (sessionId ? 4 + session.length : 0));
   prefix.set([0x11, 0x94, 0x10, 0]);
@@ -42,14 +44,14 @@ function eventResponse(event, sessionId = "") {
   return Buffer.concat([prefix, Buffer.alloc(4)]);
 }
 
-function audioResponse(audio) {
+function audioResponse(audio: Buffer) {
   const frame = Buffer.alloc(8);
   frame.set([0x11, 0xb0, 0x10, 0]);
   frame.writeUInt32BE(audio.length, 4);
   return Buffer.concat([frame, audio]);
 }
 
-function errorResponse(message) {
+function errorResponse(message: string) {
   const payload = Buffer.from(JSON.stringify({ error: message }));
   const frame = Buffer.alloc(12);
   frame.set([0x11, 0xf0, 0x10, 0]);
@@ -59,28 +61,29 @@ function errorResponse(message) {
 }
 
 test("streams reply text to Doubao and plays returned PCM", async () => {
-  let socket;
-  const player = new EventEmitter();
-  const written = [];
-  player.stdin = { write: (chunk) => written.push(Buffer.from(chunk)), end: () => queueMicrotask(() => player.emit("close", 0)) };
+  let socket: FakeSocket | undefined;
+  const player = new EventEmitter() as EventEmitter & { stdin: { write: (chunk: Uint8Array) => void; end: () => void } };
+  const written: Buffer[] = [];
+  player.stdin = { write: (chunk) => { written.push(Buffer.from(chunk)); }, end: () => queueMicrotask(() => player.emit("close", 0)) };
   const tts = new VolcengineStreamingTTS({
     apiKey: "test-key",
     speaker: "zh_female_test",
-    connect: (url, options) => {
+    connect: ((url: string, options: { headers?: Record<string, string>; perMessageDeflate?: boolean }) => {
       assert.equal(url, "wss://openspeech.bytedance.com/api/v3/tts/bidirection");
-      assert.equal(options.headers["X-Api-Resource-Id"], "seed-tts-2.0");
+      assert.equal(options.headers?.["X-Api-Resource-Id"], "seed-tts-2.0");
       assert.equal(options.perMessageDeflate, false);
       socket = new FakeSocket();
       return socket;
-    },
-    spawn: (command, args) => {
+    }) as never,
+    spawn: ((command: string, args: string[]) => {
       assert.equal(command, "ffplay");
       assert.deepEqual(args, ["-nodisp", "-autoexit", "-loglevel", "error", "-f", "s16le", "-ar", "24000", "-ch_layout", "mono", "-"]);
       return player;
-    },
+    }) as never,
   });
 
   await tts.speak("订单已创建");
+  assert.ok(socket);
 
   assert.deepEqual(socket.sent.map((frame) => frame.readInt32BE(4)), [1, 100, 200, 102, 2]);
   assert.deepEqual(written, [Buffer.from("pcm")]);
@@ -93,44 +96,45 @@ test("streams reply text to Doubao and plays returned PCM", async () => {
 });
 
 test("shows the TTS service error reason", async () => {
-  const player = new EventEmitter();
+  const player = new EventEmitter() as EventEmitter & { stdin: { write: () => void; end: () => void } };
   player.stdin = { write() {}, end() {} };
   const tts = new VolcengineStreamingTTS({
     apiKey: "test-key",
     speaker: "zh_female_test",
-    connect: () => {
+    connect: (() => {
       const socket = new FakeSocket();
       const send = socket.send.bind(socket);
-      socket.send = (frame) => {
+      socket.send = (frame: Uint8Array) => {
         if (Buffer.from(frame).readInt32BE(4) === 200) return queueMicrotask(() => socket.emit("message", errorResponse("音色与模型不匹配")));
         send(frame);
       };
       return socket;
-    },
-    spawn: () => player,
+    }) as never,
+    spawn: (() => player) as never,
   });
 
   await assert.rejects(() => tts.speak("语音测试"), { message: "豆包语音合成失败：音色与模型不匹配" });
 });
 
 test("stops the active synthesis when recording begins", async () => {
-  let socket;
+  let socket: FakeSocket | undefined;
   let killed = false;
-  const player = new EventEmitter();
-  player.stdin = new EventEmitter();
+  const player = new EventEmitter() as EventEmitter & { stdin: EventEmitter & { write: () => void; end: () => void }; kill: () => void };
+  player.stdin = new EventEmitter() as EventEmitter & { write: () => void; end: () => void };
   player.stdin.write = () => {};
   player.stdin.end = () => {};
   player.kill = () => { killed = true; };
   const tts = new VolcengineStreamingTTS({
     apiKey: "test-key",
     speaker: "zh_female_test",
-    connect: () => {
-      socket = new FakeSocket();
-      socket.send = (frame) => socket.sent.push(Buffer.from(frame));
-      socket.close = () => { socket.closed = true; };
-      return socket;
-    },
-    spawn: () => player,
+    connect: (() => {
+      const connected = new FakeSocket();
+      socket = connected;
+      connected.send = (frame: Uint8Array) => connected.sent.push(Buffer.from(frame));
+      connected.close = () => { connected.closed = true; };
+      return connected;
+    }) as never,
+    spawn: (() => player) as never,
   });
 
   const speaking = tts.speak("正在播报");
@@ -138,6 +142,7 @@ test("stops the active synthesis when recording begins", async () => {
   tts.stop();
   assert.doesNotThrow(() => player.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" })));
   await speaking;
+  assert.ok(socket);
 
   assert.equal(killed, true);
   assert.equal(socket.closed, true);

@@ -1,6 +1,8 @@
 const decoder = new TextDecoder();
 let pending = "";
 
+export {};
+
 console.error(JSON.stringify({ type: "ready", protocolVersion: 1 }));
 await Bun.write(Bun.stdout, new Uint8Array(640));
 

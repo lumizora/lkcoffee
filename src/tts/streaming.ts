@@ -1,13 +1,25 @@
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { gunzipSync } from "node:zlib";
 import WebSocket from "ws";
 
 const endpoint = "wss://openspeech.bytedance.com/api/v3/tts/bidirection";
 const connectionEvents = new Set([1, 2, 50, 51, 52]);
+type Connect = (address: string, options: WebSocket.ClientOptions) => WebSocket;
+type TTSOptions = { apiKey?: string; speaker?: string; resourceId?: string; url?: string; connect?: Connect; spawn?: typeof spawn };
+type TTSResponse = { type: number; event?: number; payload: Buffer };
 
 export class VolcengineStreamingTTS {
-  constructor({ apiKey, speaker, resourceId = "seed-tts-2.0", url = endpoint, connect = (address, options) => new WebSocket(address, options), spawn: startPlayer = spawn }) {
+  private apiKey: string;
+  private speaker: string;
+  private resourceId: string;
+  private url: string;
+  private connect: Connect;
+  private startPlayer: typeof spawn;
+  private socket: WebSocket | null = null;
+  private session: Session | null = null;
+
+  constructor({ apiKey, speaker, resourceId = "seed-tts-2.0", url = endpoint, connect = (address, options) => new WebSocket(address, options), spawn: startPlayer = spawn }: TTSOptions) {
     if (!apiKey) throw new Error("缺少 VOLCENGINE_API_KEY");
     if (!speaker) throw new Error("缺少 TTS_SPEAKER");
     this.apiKey = apiKey;
@@ -18,7 +30,7 @@ export class VolcengineStreamingTTS {
     this.startPlayer = startPlayer;
   }
 
-  async speak(text) {
+  async speak(text: string): Promise<void> {
     if (!text.trim()) return;
     this.stop();
     const requestId = randomUUID();
@@ -42,7 +54,7 @@ export class VolcengineStreamingTTS {
     }
   }
 
-  stop() {
+  stop(): void {
     const socket = this.socket;
     this.socket = null;
     this.session?.stop();
@@ -52,7 +64,18 @@ export class VolcengineStreamingTTS {
 }
 
 class Session {
-  constructor(socket, startPlayer, speaker, text) {
+  readonly socket: WebSocket;
+  private speaker: string;
+  private text: string;
+  private sessionId: string;
+  private player: ChildProcess;
+  private done: Promise<void>;
+  private resolve!: () => void;
+  private reject!: (reason?: unknown) => void;
+  private finished = false;
+  private stopped = false;
+
+  constructor(socket: WebSocket, startPlayer: typeof spawn, speaker: string, text: string) {
     this.socket = socket;
     this.speaker = speaker;
     this.text = text;
@@ -62,21 +85,21 @@ class Session {
     this.done.catch(() => {});
   }
 
-  start() {
+  start(): Promise<void> {
     this.socket.on("message", (data) => this.receive(data));
     this.socket.on("error", (error) => this.fail(error));
     this.player.on("error", (error) => this.fail(new Error(`语音播放失败：${error.message}`)));
-    this.player.stdin.on?.("error", (error) => { if (!this.stopped) this.fail(new Error(`语音播放失败：${error.message}`)); });
+    this.stdin.on?.("error", (error) => { if (!this.stopped) this.fail(new Error(`语音播放失败：${error.message}`)); });
     this.socket.send(eventRequest(1));
     return this.done;
   }
 
-  receive(data) {
+  receive(data: WebSocket.RawData): void {
     if (this.finished) return;
     try {
       const response = parseResponse(data);
-      if (response.type === 11 && response.payload.length) this.player.stdin.write(response.payload);
-      if (response.type === 15 || [51, 153].includes(response.event)) throw new Error(`豆包语音合成失败：${errorMessage(response.payload)}`);
+      if (response.type === 11 && response.payload.length) this.stdin.write(response.payload);
+      if (response.type === 15 || response.event === 51 || response.event === 153) throw new Error(`豆包语音合成失败：${errorMessage(response.payload)}`);
       if (response.event === 50) this.socket.send(eventRequest(100, this.sessionId, { event: 100, namespace: "BidirectionalTTS", user: { uid: "voice-cli" }, req_params: { speaker: this.speaker, audio_params: { format: "pcm", sample_rate: 24000 } } }));
       if (response.event === 150) {
         this.socket.send(eventRequest(200, this.sessionId, { event: 200, namespace: "BidirectionalTTS", req_params: { text: this.text } }));
@@ -86,15 +109,15 @@ class Session {
     } catch (error) { this.fail(error); }
   }
 
-  finish() {
+  finish(): void {
     if (this.finished) return;
     this.finished = true;
     this.socket.send(eventRequest(2));
     this.player.once("close", () => { this.socket.close(); this.resolve(); });
-    this.player.stdin.end();
+    this.stdin.end();
   }
 
-  fail(error) {
+  fail(error: unknown): void {
     if (this.finished) return;
     this.finished = true;
     this.player.kill?.();
@@ -102,7 +125,7 @@ class Session {
     this.reject(error);
   }
 
-  stop() {
+  stop(): void {
     if (this.stopped) return;
     this.stopped = true;
     this.finished = true;
@@ -110,9 +133,14 @@ class Session {
     this.socket.close();
     this.resolve();
   }
+
+  private get stdin() {
+    if (!this.player.stdin) throw new Error("语音播放器不可用");
+    return this.player.stdin;
+  }
 }
 
-function opened(socket) {
+function opened(socket: WebSocket): Promise<void> {
   return new Promise((resolve, reject) => {
     socket.on("open", resolve);
     socket.on("error", reject);
@@ -120,7 +148,7 @@ function opened(socket) {
   });
 }
 
-function eventRequest(event, sessionId, payload = {}) {
+function eventRequest(event: number, sessionId?: string, payload: object = {}): Buffer {
   const session = sessionId ? Buffer.from(sessionId) : Buffer.alloc(0);
   const body = Buffer.from(JSON.stringify(payload));
   const parts = [Buffer.from([0x11, 0x14, 0x10, 0]), int(event)];
@@ -129,8 +157,8 @@ function eventRequest(event, sessionId, payload = {}) {
   return Buffer.concat(parts);
 }
 
-function parseResponse(data) {
-  const input = Buffer.from(data);
+function parseResponse(data: WebSocket.RawData): TTSResponse {
+  const input = rawBuffer(data);
   const type = input[1] >> 4;
   const flags = input[1] & 0x0f;
   let offset = (input[0] & 0x0f) * 4;
@@ -150,21 +178,25 @@ function parseResponse(data) {
   return { type, event, payload: (input[2] & 0x0f) === 1 ? gunzipSync(payload) : payload };
 }
 
-function errorMessage(payload) {
+function errorMessage(payload: Buffer): string {
   try {
-    const body = JSON.parse(payload);
+    const body = JSON.parse(payload.toString()) as { message?: string; msg?: string; error?: string };
     return body.message ?? body.msg ?? body.error ?? "服务返回错误";
   } catch { return "服务返回错误"; }
 }
 
-function int(value) {
+function int(value: number): Buffer {
   const output = Buffer.alloc(4);
   output.writeInt32BE(value);
   return output;
 }
 
-function uint(value) {
+function uint(value: number): Buffer {
   const output = Buffer.alloc(4);
   output.writeUInt32BE(value);
   return output;
+}
+
+function rawBuffer(data: WebSocket.RawData): Buffer {
+  return Buffer.isBuffer(data) ? data : Array.isArray(data) ? Buffer.concat(data) : Buffer.from(data);
 }

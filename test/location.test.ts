@@ -3,7 +3,7 @@ import test from "node:test";
 import { locate } from "../src/location";
 
 test("locate returns coordinates emitted by the native helper", async () => {
-  const location = await locate((_file, _args, _options, done) => done(null, '{"latitude":31.2304,"longitude":121.4737}\n'));
+  const location = await locate((_file, _args, _options, done) => done(null, '{"latitude":31.2304,"longitude":121.4737}\n', ""));
   assert.deepEqual(location, { latitude: 31.2304, longitude: 121.4737 });
 });
 

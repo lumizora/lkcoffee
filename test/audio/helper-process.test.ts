@@ -7,7 +7,7 @@ test("matches get_devices responses and streams PCM stdout", async () => {
   });
 
   await helper.start();
-  expect(await helper.request("get_devices")).toEqual([
+  expect(await helper.request<Array<{ id: string; name: string; isDefault: boolean }>>("get_devices")).toEqual([
     { id: "default", name: "Default", isDefault: true },
   ]);
 

@@ -40,7 +40,8 @@ test("AudioHelper lists the system input devices", async () => {
     if (done) break;
     text += new TextDecoder().decode(value);
   }
-  const response = text.split("\n").filter(Boolean).map(JSON.parse).find((line) => line.id === "devices");
+  const response = text.split("\n").filter(Boolean).map((line) => JSON.parse(line) as { id?: string; payload?: unknown[] }).find((line) => line.id === "devices");
+  if (!response?.payload) throw new Error("AudioHelper 未返回设备列表");
   expect(response.payload.length).toBeGreaterThan(0);
   helper.kill();
 });

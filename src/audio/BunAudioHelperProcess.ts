@@ -19,8 +19,9 @@ export class BunAudioHelperProcess {
   constructor(readonly options: { command: string[]; timeoutMs?: number }) {}
 
   get audio(): ReadableStream<Uint8Array> {
-    if (!this.#process) throw new Error("AudioHelper 尚未启动");
-    return this.#process.stdout;
+    const output = this.#process?.stdout;
+    if (!(output instanceof ReadableStream)) throw new Error("AudioHelper 尚未启动");
+    return output;
   }
 
   onEvent(listener: (event: AudioEvent) => void): () => void {
@@ -41,7 +42,9 @@ export class BunAudioHelperProcess {
       stdout: "pipe",
       stderr: "pipe",
     });
-    void this.#readControl(this.#process.stderr);
+    const error = this.#process.stderr;
+    if (!(error instanceof ReadableStream)) throw new Error("AudioHelper 无法读取控制通道");
+    void this.#readControl(error);
     void this.#watchExit(this.#process);
     return this.#ready;
   }
@@ -56,7 +59,9 @@ export class BunAudioHelperProcess {
         reject(new AudioHelperProcessError({ code: "IPC_FAILED", message: "AudioHelper 请求超时", recoverable: true }));
       }, timeoutMs);
       this.#pending.set(id, { resolve: resolve as (payload: unknown) => void, reject, timer });
-      this.#process?.stdin.write(JSON.stringify({ id, type, payload }) + "\n");
+      const input = this.#process?.stdin;
+      if (!input || typeof input === "number") return reject(new Error("AudioHelper 尚未启动"));
+      input.write(JSON.stringify({ id, type, payload }) + "\n");
     });
   }
 
@@ -74,8 +79,9 @@ export class BunAudioHelperProcess {
 
   async #readControl(stream: ReadableStream<Uint8Array>): Promise<void> {
     let pending = "";
-    for await (const chunk of stream.pipeThrough(new TextDecoderStream())) {
-      pending += chunk;
+    const decoder = new TextDecoder();
+    for await (const chunk of stream) {
+      pending += decoder.decode(chunk, { stream: true });
       const lines = pending.split("\n");
       pending = lines.pop() ?? "";
       for (const line of lines) this.#handleControl(line);
