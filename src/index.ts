@@ -1,8 +1,8 @@
-import { VolcengineStreamingASR } from "./asr/streaming.js";
-import { VolcengineStreamingTTS } from "./tts/streaming.js";
-import { CoffeeAgent } from "./coffee-agent.js";
-import { locate } from "./location.js";
-import * as ui from "./ui.js";
+import { VolcengineStreamingASR } from "./asr/streaming";
+import { VolcengineStreamingTTS } from "./tts/streaming";
+import { CoffeeAgent } from "./coffee-agent";
+import { locate } from "./location";
+import * as ui from "./ui";
 import { AudioManager } from "./audio/AudioManager";
 import { RecorderBridge } from "./audio/RecorderBridge";
 

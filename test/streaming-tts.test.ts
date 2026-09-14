@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import test from "node:test";
-import { VolcengineStreamingTTS } from "../src/tts/streaming.js";
+import { VolcengineStreamingTTS } from "../src/tts/streaming";
 
 class FakeSocket extends EventEmitter {
   constructor() {

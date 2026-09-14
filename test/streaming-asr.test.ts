@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { gunzipSync, gzipSync } from "node:zlib";
 import test from "node:test";
-import { VolcengineStreamingASR } from "../src/asr/streaming.js";
+import { VolcengineStreamingASR } from "../src/asr/streaming";
 
 class FakeSocket {
   constructor() {

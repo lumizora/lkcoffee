@@ -89,6 +89,7 @@ export class AudioManager {
 
   async start(): Promise<void> {
     await this.initialize();
+    await this.#helper.start();
     if (this.#status === "capturing") return;
     await this.#helper.request("select_device", { deviceId: this.#selectedDevice });
     await this.#helper.request("start");

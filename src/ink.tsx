@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, render, Text, useApp, useInput } from "ink";
-import { VolcengineStreamingASR } from "./asr/streaming.js";
-import { VolcengineStreamingTTS } from "./tts/streaming.js";
-import { CoffeeAgent } from "./coffee-agent.js";
-import { locate } from "./location.js";
+import { VolcengineStreamingASR } from "./asr/streaming";
+import { VolcengineStreamingTTS } from "./tts/streaming";
+import { CoffeeAgent } from "./coffee-agent";
+import { locate } from "./location";
 import { AudioManager } from "./audio/AudioManager";
 import { RecorderBridge } from "./audio/RecorderBridge";
+import { statusMark } from "./ink-status";
 
 type Turn = { text: string; role: "user" | "assistant" };
 type Result = { text: string; duration: number };
@@ -18,6 +19,7 @@ function App() {
   const { exit } = useApp();
   const [status, setStatus] = useState("正在初始化...");
   const [recording, setRecording] = useState(false);
+  const [recordingFrame, setRecordingFrame] = useState(0);
   const [partial, setPartial] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const runtime = useRef<{
@@ -85,6 +87,15 @@ function App() {
       void audio.shutdown();
     };
   }, []);
+
+  useEffect(() => {
+    if (!recording) {
+      setRecordingFrame(0);
+      return;
+    }
+    const timer = setInterval(() => setRecordingFrame((frame) => frame + 1), 180);
+    return () => clearInterval(timer);
+  }, [recording]);
 
   async function reply(result: Result, includeUser = true) {
     const current = runtime.current!;
@@ -176,15 +187,15 @@ function App() {
       <Box marginTop={1} paddingX={1}>
         <Text dimColor>Space 录音/停止   Enter 发送   T 重试   D 删除   Q 退出</Text>
       </Box>
-      <Box marginTop={1} borderStyle="single" borderColor={recording ? "red" : "gray"} paddingX={2} paddingY={1}>
-        <Text color={recording ? "red" : "yellow"}>{recording ? "● " : "◌ "}{status}</Text>
-      </Box>
-      {partial && <Box marginTop={1} paddingX={2}><Text dimColor>◌ {partial}</Text></Box>}
       {turns.map((turn, index) => (
         <Box key={index} marginTop={1} borderStyle="round" borderColor={turn.role === "user" ? "blue" : "green"} paddingX={2} paddingY={1}>
           <Text color={turn.role === "user" ? "blue" : "green"}>{turn.text}</Text>
         </Box>
       ))}
+      {partial && <Box marginTop={1} paddingX={2}><Text dimColor>◌ {partial}</Text></Box>}
+      <Box marginTop={1} borderStyle="single" borderColor={recording ? "red" : "gray"} paddingX={2} paddingY={1}>
+        <Text color={recording ? "red" : "yellow"}>{statusMark(recording, recordingFrame)} {status}</Text>
+      </Box>
     </Box>
   );
 }

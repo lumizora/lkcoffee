@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CoffeeAgent } from "../src/coffee-agent.js";
+import { CoffeeAgent } from "../src/coffee-agent";
 
 test("coffee agent turns an MCP tool result into a spoken reply", async () => {
   let modelCalls = 0;

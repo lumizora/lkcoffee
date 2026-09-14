@@ -12,13 +12,14 @@ struct Command: Decodable {
 }
 
 final class AudioHelper {
-  private let engine = AVAudioEngine()
+  private var engine = AVAudioEngine()
   private let conversionQueue = DispatchQueue(label: "com.alwaysmissly.voice-coffee.audio-conversion")
   private var converter: AVAudioConverter?
   private var targetFormat: AVAudioFormat?
   private var pendingPCM = Data()
   private var selectedDeviceID = "default"
   private var capturing = false
+  private var tapInstalled = false
 
   init() {
     event(["type": "ready", "protocolVersion": 1, "helperVersion": "0.1.0", "platform": "darwin"])
@@ -92,29 +93,47 @@ final class AudioHelper {
       }
     }
     let sourceFormat = input.outputFormat(forBus: 0)
-    guard sourceFormat.sampleRate > 0,
+    guard sourceFormat.sampleRate > 0, sourceFormat.channelCount > 0,
       let outputFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16_000, channels: 1, interleaved: true),
       let newConverter = AVAudioConverter(from: sourceFormat, to: outputFormat)
     else {
-      throw NSError(domain: "AudioHelper", code: 3, userInfo: [NSLocalizedDescriptionKey: "无法创建音频转换器"])
+      throw NSError(domain: "AudioHelper", code: 3, userInfo: [NSLocalizedDescriptionKey: "当前输入设备不可用"])
     }
     converter = newConverter
     targetFormat = outputFormat
-    input.removeTap(onBus: 0)
+    if tapInstalled {
+      input.removeTap(onBus: 0)
+      tapInstalled = false
+    }
     input.installTap(onBus: 0, bufferSize: 1024, format: sourceFormat) { [weak self] buffer, _ in
       guard let copy = buffer.copy() as? AVAudioPCMBuffer else { return }
       self?.conversionQueue.async { self?.convertAndWrite(copy) }
     }
-    engine.prepare()
-    try engine.start()
+    tapInstalled = true
+    do {
+      engine.prepare()
+      try engine.start()
+    } catch {
+      input.removeTap(onBus: 0)
+      tapInstalled = false
+      converter = nil
+      targetFormat = nil
+      engine = AVAudioEngine()
+      throw error
+    }
     capturing = true
     event(["type": "capture_started"])
   }
 
   private func stopCapture() {
     if !capturing { return }
-    engine.inputNode.removeTap(onBus: 0)
+    if tapInstalled {
+      engine.inputNode.removeTap(onBus: 0)
+      tapInstalled = false
+    }
     engine.stop()
+    engine.reset()
+    engine = AVAudioEngine()
     converter = nil
     targetFormat = nil
     pendingPCM.removeAll(keepingCapacity: true)

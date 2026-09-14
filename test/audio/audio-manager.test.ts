@@ -20,6 +20,27 @@ class FakeHelper {
   emit(chunk: Uint8Array) { this.#controller.enqueue(chunk); }
 }
 
+class RestartingHelper {
+  #controller!: ReadableStreamDefaultController<Uint8Array>;
+  #starts = 0;
+  #audio = new ReadableStream<Uint8Array>({
+    start: (controller) => { this.#controller = controller; },
+  });
+
+  get audio(): ReadableStream<Uint8Array> {
+    if (this.#starts < 2) throw new Error("AudioHelper 尚未启动");
+    return this.#audio;
+  }
+
+  async start() { this.#starts++; }
+  async stop() {}
+  onEvent(_listener: (event: AudioEvent) => void) { return () => {}; }
+  async request(type: AudioCommandType) {
+    if (type === "get_permission") return "granted";
+    return null;
+  }
+}
+
 test("forwards complete native frames to listeners", async () => {
   const helper = new FakeHelper();
   const manager = new AudioManager({ helper });
@@ -52,5 +73,15 @@ test("keeps the PCM stream usable after stopping and starting again", async () =
   await Bun.sleep(0);
 
   expect(sizes).toEqual([640, 640]);
+  await manager.shutdown();
+});
+
+test("recovers a stopped helper before a new capture", async () => {
+  const manager = new AudioManager({ helper: new RestartingHelper() });
+
+  await manager.initialize();
+  await manager.start();
+
+  expect(manager.getStatus()).toBe("capturing");
   await manager.shutdown();
 });

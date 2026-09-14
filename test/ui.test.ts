@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatMessage, openPayment } from "../src/ui.js";
+import { formatMessage, openPayment } from "../src/ui";
 
 test("keeps model text unchanged inside an unlabeled terminal block", () => {
   assert.equal(
