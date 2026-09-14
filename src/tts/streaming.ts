@@ -6,7 +6,7 @@ import WebSocket from "ws";
 const endpoint = "wss://openspeech.bytedance.com/api/v3/tts/bidirection";
 const connectionEvents = new Set([1, 2, 50, 51, 52]);
 type Connect = (address: string, options: WebSocket.ClientOptions) => WebSocket;
-type TTSOptions = { apiKey?: string; speaker?: string; resourceId?: string; url?: string; connect?: Connect; spawn?: typeof spawn };
+type TTSOptions = { apiKey?: string; speaker?: string; resourceId?: string; url?: string; speechRate?: number; connect?: Connect; spawn?: typeof spawn };
 type TTSResponse = { type: number; event?: number; payload: Buffer };
 
 export class VolcengineStreamingTTS {
@@ -14,18 +14,21 @@ export class VolcengineStreamingTTS {
   private speaker: string;
   private resourceId: string;
   private url: string;
+  private speechRate: number;
   private connect: Connect;
   private startPlayer: typeof spawn;
   private socket: WebSocket | null = null;
   private session: Session | null = null;
 
-  constructor({ apiKey, speaker, resourceId = "seed-tts-2.0", url = endpoint, connect = (address, options) => new WebSocket(address, options), spawn: startPlayer = spawn }: TTSOptions) {
+  constructor({ apiKey, speaker, resourceId = "seed-tts-2.0", url = endpoint, speechRate = 30, connect = (address, options) => new WebSocket(address, options), spawn: startPlayer = spawn }: TTSOptions) {
     if (!apiKey) throw new Error("缺少 VOLCENGINE_API_KEY");
     if (!speaker) throw new Error("缺少 TTS_SPEAKER");
+    if (!Number.isInteger(speechRate) || speechRate < -50 || speechRate > 100) throw new Error("TTS_SPEECH_RATE 必须在 -50 到 100 之间");
     this.apiKey = apiKey;
     this.speaker = speaker;
     this.resourceId = resourceId;
     this.url = url;
+    this.speechRate = speechRate;
     this.connect = connect;
     this.startPlayer = startPlayer;
   }
@@ -43,7 +46,7 @@ export class VolcengineStreamingTTS {
     try {
       await opened(socket);
       if (this.socket !== socket) return;
-      const session = new Session(socket, this.startPlayer, this.speaker, text);
+      const session = new Session(socket, this.startPlayer, this.speaker, this.speechRate, text);
       this.session = session;
       await session.start();
     } catch (error) {
@@ -66,6 +69,7 @@ export class VolcengineStreamingTTS {
 class Session {
   readonly socket: WebSocket;
   private speaker: string;
+  private speechRate: number;
   private text: string;
   private sessionId: string;
   private player: ChildProcess;
@@ -75,9 +79,10 @@ class Session {
   private finished = false;
   private stopped = false;
 
-  constructor(socket: WebSocket, startPlayer: typeof spawn, speaker: string, text: string) {
+  constructor(socket: WebSocket, startPlayer: typeof spawn, speaker: string, speechRate: number, text: string) {
     this.socket = socket;
     this.speaker = speaker;
+    this.speechRate = speechRate;
     this.text = text;
     this.sessionId = randomUUID();
     this.player = startPlayer("ffplay", ["-nodisp", "-autoexit", "-loglevel", "error", "-f", "s16le", "-ar", "24000", "-ch_layout", "mono", "-"], { stdio: ["pipe", "ignore", "ignore"] });
@@ -100,7 +105,7 @@ class Session {
       const response = parseResponse(data);
       if (response.type === 11 && response.payload.length) this.stdin.write(response.payload);
       if (response.type === 15 || response.event === 51 || response.event === 153) throw new Error(`豆包语音合成失败：${errorMessage(response.payload)}`);
-      if (response.event === 50) this.socket.send(eventRequest(100, this.sessionId, { event: 100, namespace: "BidirectionalTTS", user: { uid: "voice-cli" }, req_params: { speaker: this.speaker, audio_params: { format: "pcm", sample_rate: 24000 } } }));
+      if (response.event === 50) this.socket.send(eventRequest(100, this.sessionId, { event: 100, namespace: "BidirectionalTTS", user: { uid: "voice-cli" }, req_params: { speaker: this.speaker, audio_params: { format: "pcm", sample_rate: 24000, speech_rate: this.speechRate } } }));
       if (response.event === 150) {
         this.socket.send(eventRequest(200, this.sessionId, { event: 200, namespace: "BidirectionalTTS", req_params: { text: this.text } }));
         this.socket.send(eventRequest(102, this.sessionId, {}));

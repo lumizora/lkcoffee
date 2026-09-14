@@ -67,6 +67,7 @@ function App() {
         speaker: process.env.TTS_SPEAKER,
         resourceId: process.env.TTS_RESOURCE_ID,
         url: process.env.TTS_URL,
+        speechRate: Number(process.env.TTS_SPEECH_RATE ?? 30),
       })
       : null;
     runtime.current = { audio, recorder, asr, tts, coffee: null, session: null, lastResult: null, busy: false, starting: false, holding: false, releasePending: false };

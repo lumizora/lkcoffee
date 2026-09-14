@@ -89,10 +89,18 @@ test("streams reply text to Doubao and plays returned PCM", async () => {
   assert.deepEqual(written, [Buffer.from("pcm")]);
   const sessionPayloadOffset = 12 + socket.sent[1].readUInt32BE(8);
   const sessionPayload = JSON.parse(socket.sent[1].subarray(sessionPayloadOffset + 4).toString());
-  assert.deepEqual(sessionPayload, { event: 100, namespace: "BidirectionalTTS", user: { uid: "voice-cli" }, req_params: { speaker: "zh_female_test", audio_params: { format: "pcm", sample_rate: 24000 } } });
+  assert.deepEqual(sessionPayload, { event: 100, namespace: "BidirectionalTTS", user: { uid: "voice-cli" }, req_params: { speaker: "zh_female_test", audio_params: { format: "pcm", sample_rate: 24000, speech_rate: 30 } } });
   const payloadOffset = 12 + socket.sent[2].readUInt32BE(8);
   const payload = JSON.parse(socket.sent[2].subarray(payloadOffset + 4).toString());
   assert.deepEqual(payload, { event: 200, namespace: "BidirectionalTTS", req_params: { text: "订单已创建" } });
+});
+
+test("rejects an unsupported speech rate", () => {
+  assert.throws(() => new VolcengineStreamingTTS({
+    apiKey: "test-key",
+    speaker: "zh_female_test",
+    speechRate: 101,
+  }), { message: "TTS_SPEECH_RATE 必须在 -50 到 100 之间" });
 });
 
 test("shows the TTS service error reason", async () => {
