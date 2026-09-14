@@ -1,5 +1,7 @@
 import OpenAI from "openai";
-import type { ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionTool } from "openai/resources/chat/completions";
+import type { ChatCompletionCreateParamsNonStreaming, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionTool } from "openai/resources/chat/completions";
+
+export type ReasoningEffort = "low" | "high" | "max";
 
 type Location = { latitude: number; longitude: number };
 type McpTool = { name: string; description: string; inputSchema: Record<string, unknown> };
@@ -40,13 +42,20 @@ export class CoffeeAgent {
     this.previewed = false;
   }
 
-  async ask(text: string): Promise<{ text: string; qrCodeUrl?: string }> {
+  async ask(text: string, reasoningEffort: ReasoningEffort = "high"): Promise<{ text: string; qrCodeUrl?: string }> {
     const tools = await this.listTools();
     this.messages.push({ role: "user", content: text });
     let qrCodeUrl;
     const priceOnly = asksForPrice(text);
     for (let turns = 0; turns < 5; turns += 1) {
-      const completion = await this.client.chat.completions.create({ model: this.model, messages: this.messages, tools });
+      const request: ChatCompletionCreateParamsNonStreaming & { thinking: { type: "enabled" } } = {
+        model: this.model,
+        messages: this.messages,
+        tools,
+        reasoning_effort: reasoningEffort,
+        thinking: { type: "enabled" },
+      };
+      const completion = await this.client.chat.completions.create(request);
       const message = completion.choices[0].message;
       if (!message.tool_calls?.length) {
         this.messages.push(message);

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { emptyStateHint, formatTurn, recentTurns, statusMark, submissionMode } from "../src/ink-status";
+import { emptyStateHint, formatTurn, nextReasoningEffort, reasoningMode, recentTurns, statusMark, submissionMode } from "../src/ink-status";
 
 test("cycles the recording status mark and resets when idle", () => {
   expect(statusMark(true, 0)).toBe("●");
@@ -11,6 +11,13 @@ test("cycles the recording status mark and resets when idle", () => {
 test("labels the current submission mode for the status bar", () => {
   expect(submissionMode(true)).toBe("自动发送 · Shift + Tab 切换");
   expect(submissionMode(false)).toBe("手动发送 · Shift + Tab 切换");
+});
+
+test("cycles and labels DeepSeek reasoning effort", () => {
+  expect(nextReasoningEffort("high")).toBe("max");
+  expect(nextReasoningEffort("max")).toBe("low");
+  expect(nextReasoningEffort("low")).toBe("high");
+  expect(reasoningMode("high")).toBe("思考 high · Ctrl+T");
 });
 
 test("keeps the newest turns visible in the fixed chat viewport", () => {

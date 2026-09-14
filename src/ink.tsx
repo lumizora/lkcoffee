@@ -2,12 +2,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { Box, render, Text, useApp, useInput, useWindowSize } from "ink";
 import { VolcengineStreamingASR } from "./asr/streaming";
 import { VolcengineStreamingTTS } from "./tts/streaming";
-import { CoffeeAgent } from "./coffee-agent";
+import { CoffeeAgent, type ReasoningEffort } from "./coffee-agent";
 import { locate } from "./location";
 import { AudioManager } from "./audio/AudioManager";
 import { RecorderBridge } from "./audio/RecorderBridge";
 import { createHoldRelease } from "./hold-space";
-import { emptyStateHint, formatTurn, recentTurns, statusMark, submissionMode } from "./ink-status";
+import { emptyStateHint, formatTurn, nextReasoningEffort, reasoningMode, recentTurns, statusMark, submissionMode } from "./ink-status";
 
 type Turn = { text: string; role: "user" | "assistant" };
 type Result = { text: string; duration: number };
@@ -29,6 +29,7 @@ function App() {
   const [status, setStatus] = useState("正在初始化...");
   const [recording, setRecording] = useState(false);
   const [autoSubmit, setAutoSubmit] = useState(true);
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("high");
   const [locationReady, setLocationReady] = useState(false);
   const [recordingFrame, setRecordingFrame] = useState(0);
   const [partial, setPartial] = useState("");
@@ -40,7 +41,6 @@ function App() {
     tts: VolcengineStreamingTTS | null;
     coffee: CoffeeAgent | null;
     session: any;
-    lastAudio: Uint8Array[] | null;
     lastResult: Result | null;
     busy: boolean;
     starting: boolean;
@@ -48,6 +48,7 @@ function App() {
     releasePending: boolean;
   } | null>(null);
   const autoSubmitRef = useRef(true);
+  const reasoningEffortRef = useRef<ReasoningEffort>("high");
   const finishHeldRef = useRef<() => void>(() => {});
   const hold = useRef<ReturnType<typeof createHoldRelease> | null>(null);
   if (!hold.current) hold.current = createHoldRelease(() => finishHeldRef.current());
@@ -68,7 +69,7 @@ function App() {
         url: process.env.TTS_URL,
       })
       : null;
-    runtime.current = { audio, recorder, asr, tts, coffee: null, session: null, lastAudio: null, lastResult: null, busy: false, starting: false, holding: false, releasePending: false };
+    runtime.current = { audio, recorder, asr, tts, coffee: null, session: null, lastResult: null, busy: false, starting: false, holding: false, releasePending: false };
     audio.onError((error) => setStatus("错误 · " + error.message));
 
     void (async () => {
@@ -123,7 +124,7 @@ function App() {
     setStatus("识别完成 · " + (result.duration / 1000).toFixed(1) + " 秒");
     if (!current.coffee) return;
     setStatus("正在查询瑞幸...");
-    const response = await current.coffee.ask(result.text);
+    const response = await current.coffee.ask(result.text, reasoningEffortRef.current);
     setTurns((items) => [
       ...items,
       { role: "assistant", text: response.text },
@@ -141,7 +142,7 @@ function App() {
     current.session = null;
     setRecording(false);
     setStatus("正在完成识别...");
-    current.lastAudio = await current.recorder.stop();
+    await current.recorder.stop();
     const result = await session.finish() as Result;
     current.lastResult = result;
     setPartial("");
@@ -210,7 +211,7 @@ function App() {
   useInput((input, key) => {
     const current = runtime.current;
     if (!current) return;
-    if (input === "q" || (key.ctrl && input === "c")) {
+    if (key.ctrl && input === "c") {
       hold.current?.cancel();
       current.tts?.stop();
       exit();
@@ -223,29 +224,24 @@ function App() {
       setAutoSubmit(next);
       return;
     }
+    if (key.ctrl && input === "t") {
+      const next = nextReasoningEffort(reasoningEffortRef.current);
+      reasoningEffortRef.current = next;
+      setReasoningEffort(next);
+      return;
+    }
     if (input === " ") {
       pressSpace();
       return;
     }
-    if (current.busy) return;
+    if (!key.return || current.busy) return;
     current.busy = true;
     void (async () => {
       try {
-        if (key.return) {
-          hold.current?.cancel();
-          current.holding = false;
-          if (current.audio.getStatus() === "capturing") await stop(true);
-          else if (current.lastResult) await reply(current.lastResult, false);
-        } else if (input === "t" && current.lastAudio) {
-          setStatus("正在重试识别...");
-          const retry = await current.asr.start(setPartial);
-          for (const chunk of current.lastAudio) retry.write(chunk);
-          await reply(await retry.finish() as Result);
-        } else if (input === "d") {
-          current.lastAudio = null;
-          current.lastResult = null;
-          setStatus("已删除最近一次录音");
-        }
+        hold.current?.cancel();
+        current.holding = false;
+        if (current.audio.getStatus() === "capturing") await stop(true);
+        else if (current.lastResult) await reply(current.lastResult, false);
       } catch (error) {
         setRecording(false);
         setStatus("错误 · " + errorMessage(error));
@@ -278,7 +274,7 @@ function App() {
       </Box>
       <Box borderStyle="single" borderTop borderBottom={false} borderLeft={false} borderRight={false} borderColor={colors.line} paddingX={1} justifyContent="space-between" flexShrink={0}>
         <Text bold={recording} color={recording ? colors.accent : status.startsWith("错误") ? "yellow" : colors.text}>{statusMark(recording, recordingFrame)} {status}</Text>
-        <Text color={colors.muted}>{submissionMode(autoSubmit)}</Text>
+        <Text color={colors.muted}>{reasoningMode(reasoningEffort)}  {submissionMode(autoSubmit)}</Text>
       </Box>
     </Box>
   );

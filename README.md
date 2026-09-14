@@ -6,7 +6,7 @@ Voice Coffee 是一个 macOS 语音点单实验：本地麦克风音频经豆包
 
 ```text
 ☕ Voice Coffee  ·  语音点单助手
-Space 录音/停止  Enter 停止并发送  T 重试识别  D 删除录音  Q 退出
+按住 Space 说话  Enter 手动发送  Shift+Tab 切换发送模式  Ctrl+T 切换思考强度  Ctrl+C 退出
 
 ✓ 已获取当前位置，可直接查询附近门店
 ● 正在录音 · Space 停止，Enter 发送
@@ -71,11 +71,11 @@ bun run start
 
 | 按键 | 操作 |
 | --- | --- |
-| `Space` | 开始录音 / 停止录音 |
-| `Enter` | 停止录音并发送识别结果 |
-| `T` | 重试识别最近一次录音 |
-| `D` | 删除最近一次录音 |
-| `Q` | 退出 |
+| 按住 `Space` | 开始录音，松开后结束 |
+| `Enter` | 手动模式下发送识别结果 |
+| `Shift+Tab` | 切换自动 / 手动发送 |
+| `Ctrl+T` | 切换思考强度 `low / high / max` |
+| `Ctrl+C` | 退出 |
 
 可以直接说：
 

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { CoffeeAgent } from "../src/coffee-agent";
 
-type ModelRequest = { messages: Array<{ role: string; content?: string | null }> };
+type ModelRequest = {
+  messages: Array<{ role: string; content?: string | null; reasoning_content?: string }>;
+  reasoning_effort?: string;
+  thinking?: { type: string };
+};
 type McpRequest = { method: string; params: { name?: string; arguments?: Record<string, unknown> } };
 const body = (options?: RequestInit): McpRequest => JSON.parse(String(options?.body));
 
@@ -15,9 +19,10 @@ test("coffee agent turns an MCP tool result into a spoken reply", async () => {
       assert.equal(request.messages.some((message) => message.content?.includes("31.2")), true);
       return { choices: [{ message: { tool_calls: [{
         id: "call-1", type: "function", function: { name: "queryShopList", arguments: '{"latitude":31.2,"longitude":121.5}' },
-      }] } }] };
+      }], reasoning_content: "需要查询附近门店" } }] };
     }
     assert.equal(request.messages.at(-1)?.role, "tool");
+    assert.equal(request.messages.some((message) => message.reasoning_content === "需要查询附近门店"), true);
     return { choices: [{ message: { content: "附近有 1 家瑞幸，请选择门店。" } }] };
   } } } };
   const fetch = async (_url: string, options?: RequestInit) => {
@@ -68,6 +73,27 @@ test("coffee agent creates the previewed order after one voice confirmation", as
   assert.equal(modelCalls, 3);
   assert.equal(paid.qrCodeUrl, "https://pay.example/qr");
   assert.equal((await agent.ask("查询我的订单")).text, "我会查询订单 order-1。");
+});
+
+test("coffee agent sends the selected DeepSeek thinking effort", async () => {
+  const requests: ModelRequest[] = [];
+  const client = { chat: { completions: { create: async (request: ModelRequest) => {
+    requests.push(request);
+    return { choices: [{ message: { content: "好的。" } }] };
+  } } } };
+  const fetch = async (_url: string, options?: RequestInit) => {
+    const request = body(options);
+    assert.equal(request.method, "tools/list");
+    return new Response(JSON.stringify({ result: { tools: [] } }));
+  };
+  const agent = new CoffeeAgent({ client: client as never, fetch, token: "test-token" });
+
+  await agent.ask("你好");
+  await agent.ask("再想想", "max");
+
+  assert.equal(requests[0].reasoning_effort, "high");
+  assert.equal(requests[1].reasoning_effort, "max");
+  assert.deepEqual(requests[0].thinking, { type: "enabled" });
 });
 
 test("coffee agent shows the final price without creating when the user asks for it", async () => {

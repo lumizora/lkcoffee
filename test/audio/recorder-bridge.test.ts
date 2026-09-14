@@ -12,7 +12,7 @@ class FakeAudio {
   emit(data: Uint8Array) { this.#listener?.({ data }); }
 }
 
-test("forwards native PCM to ASR and retains it for retry", async () => {
+test("forwards native PCM to ASR without retaining the recording", async () => {
   const audio = new FakeAudio();
   const writes: Uint8Array[] = [];
   const bridge = new RecorderBridge(audio);
@@ -21,5 +21,5 @@ test("forwards native PCM to ASR and retains it for retry", async () => {
   audio.emit(new Uint8Array(640));
 
   expect(writes).toHaveLength(1);
-  expect(await bridge.stop()).toEqual([new Uint8Array(640)]);
+  expect(await bridge.stop()).toBeUndefined();
 });
