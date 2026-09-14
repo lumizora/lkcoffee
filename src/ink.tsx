@@ -1,15 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Box, render, Text, useApp, useInput } from "ink";
+import { Box, render, Text, useApp, useInput, useWindowSize } from "ink";
 import { VolcengineStreamingASR } from "./asr/streaming";
 import { VolcengineStreamingTTS } from "./tts/streaming";
 import { CoffeeAgent } from "./coffee-agent";
 import { locate } from "./location";
 import { AudioManager } from "./audio/AudioManager";
 import { RecorderBridge } from "./audio/RecorderBridge";
-import { statusMark } from "./ink-status";
+import { createHoldRelease } from "./hold-space";
+import { emptyStateHint, formatTurn, recentTurns, statusMark, submissionMode } from "./ink-status";
 
 type Turn = { text: string; role: "user" | "assistant" };
 type Result = { text: string; duration: number };
+
+const colors = {
+  accent: "#eeb76b",
+  text: "#eee7dc",
+  muted: "#8e8982",
+  line: "#4b4844",
+};
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败";
@@ -17,8 +25,11 @@ function errorMessage(error: unknown) {
 
 function App() {
   const { exit } = useApp();
+  const { columns, rows } = useWindowSize();
   const [status, setStatus] = useState("正在初始化...");
   const [recording, setRecording] = useState(false);
+  const [autoSubmit, setAutoSubmit] = useState(true);
+  const [locationReady, setLocationReady] = useState(false);
   const [recordingFrame, setRecordingFrame] = useState(0);
   const [partial, setPartial] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -32,7 +43,14 @@ function App() {
     lastAudio: Uint8Array[] | null;
     lastResult: Result | null;
     busy: boolean;
+    starting: boolean;
+    holding: boolean;
+    releasePending: boolean;
   } | null>(null);
+  const autoSubmitRef = useRef(true);
+  const finishHeldRef = useRef<() => void>(() => {});
+  const hold = useRef<ReturnType<typeof createHoldRelease> | null>(null);
+  if (!hold.current) hold.current = createHoldRelease(() => finishHeldRef.current());
 
   useEffect(() => {
     const audio = new AudioManager();
@@ -50,7 +68,7 @@ function App() {
         url: process.env.TTS_URL,
       })
       : null;
-    runtime.current = { audio, recorder, asr, tts, coffee: null, session: null, lastAudio: null, lastResult: null, busy: false };
+    runtime.current = { audio, recorder, asr, tts, coffee: null, session: null, lastAudio: null, lastResult: null, busy: false, starting: false, holding: false, releasePending: false };
     audio.onError((error) => setStatus("错误 · " + error.message));
 
     void (async () => {
@@ -67,6 +85,7 @@ function App() {
           setStatus("正在获取当前位置...");
           let location;
           try { location = await locate(); } catch {}
+          setLocationReady(Boolean(location));
           runtime.current!.coffee = new CoffeeAgent({
             apiKey: process.env.DEEPSEEK_API_KEY,
             baseURL: process.env.DEEPSEEK_BASE_URL,
@@ -75,7 +94,7 @@ function App() {
             url: process.env.LUCKIN_MCP_URL,
             location,
           });
-          setStatus(location ? "已获取当前位置，可直接查询附近门店" : "麦克风已就绪");
+          setStatus("等待录音");
         }
       } catch (error) {
         setStatus("错误 · " + errorMessage(error));
@@ -83,6 +102,7 @@ function App() {
     })();
 
     return () => {
+      hold.current?.cancel();
       tts?.stop();
       void audio.shutdown();
     };
@@ -117,11 +137,12 @@ function App() {
   async function stop(send: boolean) {
     const current = runtime.current;
     if (!current?.session) return;
+    const session = current.session;
+    current.session = null;
     setRecording(false);
     setStatus("正在完成识别...");
     current.lastAudio = await current.recorder.stop();
-    const result = await current.session.finish() as Result;
-    current.session = null;
+    const result = await session.finish() as Result;
     current.lastResult = result;
     setPartial("");
     if (send) await reply(result);
@@ -133,7 +154,7 @@ function App() {
 
   async function start() {
     const current = runtime.current;
-    if (!current) return;
+    if (!current || current.session) return;
     current.tts?.stop();
     setPartial("");
     current.session = await current.asr.start(setPartial);
@@ -142,21 +163,77 @@ function App() {
     setStatus("正在录音 · 实时识别中");
   }
 
+  async function finishHeld() {
+    const current = runtime.current;
+    if (!current?.session || current.busy) return;
+    current.busy = true;
+    try {
+      await stop(autoSubmitRef.current);
+    } catch (error) {
+      setRecording(false);
+      setStatus("错误 · " + errorMessage(error));
+    } finally {
+      current.busy = false;
+    }
+  }
+
+  function pressSpace() {
+    const current = runtime.current;
+    if (!current || (current.busy && !current.starting)) return;
+    current.holding = true;
+    hold.current!.pulse();
+    if (current.session || current.starting) return;
+    current.starting = true;
+    void start().catch((error) => {
+      setRecording(false);
+      setStatus("错误 · " + errorMessage(error));
+    }).finally(() => {
+      current.starting = false;
+      if (current.releasePending || !current.holding) {
+        current.releasePending = false;
+        void finishHeld();
+      }
+    });
+  }
+
+  finishHeldRef.current = () => {
+    const current = runtime.current;
+    if (!current) return;
+    current.holding = false;
+    if (current.starting) {
+      current.releasePending = true;
+      return;
+    }
+    void finishHeld();
+  };
+
   useInput((input, key) => {
     const current = runtime.current;
-    if (!current || current.busy) return;
+    if (!current) return;
     if (input === "q" || (key.ctrl && input === "c")) {
+      hold.current?.cancel();
       current.tts?.stop();
       exit();
       return;
     }
+    if (key.tab && key.shift) {
+      hold.current?.cancel();
+      const next = !autoSubmitRef.current;
+      autoSubmitRef.current = next;
+      setAutoSubmit(next);
+      return;
+    }
+    if (input === " ") {
+      pressSpace();
+      return;
+    }
+    if (current.busy) return;
     current.busy = true;
     void (async () => {
       try {
-        if (input === " ") {
-          if (current.audio.getStatus() === "capturing") await stop(false);
-          else await start();
-        } else if (key.return) {
+        if (key.return) {
+          hold.current?.cancel();
+          current.holding = false;
           if (current.audio.getStatus() === "capturing") await stop(true);
           else if (current.lastResult) await reply(current.lastResult, false);
         } else if (input === "t" && current.lastAudio) {
@@ -178,23 +255,30 @@ function App() {
     })();
   });
 
+  const hint = emptyStateHint(turns.length, recording, partial);
+
   return (
-    <Box flexDirection="column" width={88}>
-      <Box borderStyle="round" borderColor="cyan" paddingX={2} paddingY={1} justifyContent="space-between">
-        <Text bold color="cyan">☕ Voice Coffee</Text>
-        <Text dimColor>语音点单助手 · Ink</Text>
+    <Box flexDirection="column" width={columns} height={rows}>
+      <Box borderStyle="single" borderTop={false} borderLeft={false} borderRight={false} borderBottom borderColor={colors.line} paddingX={1} justifyContent="space-between">
+        <Text bold color={colors.accent}>Voice Coffee</Text>
+        <Text color={colors.muted}>{locationReady ? "已定位" : "语音点单助手"}</Text>
       </Box>
-      <Box marginTop={1} paddingX={1}>
-        <Text dimColor>Space 录音/停止   Enter 发送   T 重试   D 删除   Q 退出</Text>
+      <Box flexDirection="column" flexGrow={1} overflow="hidden" paddingX={2} paddingTop={1}>
+        {recentTurns(turns, rows).map((turn, index) => (
+          <Box key={index} marginBottom={1}>
+            <Text color={turn.role === "user" ? colors.accent : colors.text}>{formatTurn(turn.role, turn.text)}</Text>
+          </Box>
+        ))}
+        {partial && <Text color={colors.muted}>  {partial}</Text>}
+        {hint && (
+          <Box flexGrow={1} alignItems="center" justifyContent="center">
+            <Text color={colors.muted}>{hint}</Text>
+          </Box>
+        )}
       </Box>
-      {turns.map((turn, index) => (
-        <Box key={index} marginTop={1} borderStyle="round" borderColor={turn.role === "user" ? "blue" : "green"} paddingX={2} paddingY={1}>
-          <Text color={turn.role === "user" ? "blue" : "green"}>{turn.text}</Text>
-        </Box>
-      ))}
-      {partial && <Box marginTop={1} paddingX={2}><Text dimColor>◌ {partial}</Text></Box>}
-      <Box marginTop={1} borderStyle="single" borderColor={recording ? "red" : "gray"} paddingX={2} paddingY={1}>
-        <Text color={recording ? "red" : "yellow"}>{statusMark(recording, recordingFrame)} {status}</Text>
+      <Box borderStyle="single" borderTop borderBottom={false} borderLeft={false} borderRight={false} borderColor={colors.line} paddingX={1} justifyContent="space-between" flexShrink={0}>
+        <Text bold={recording} color={recording ? colors.accent : status.startsWith("错误") ? "yellow" : colors.text}>{statusMark(recording, recordingFrame)} {status}</Text>
+        <Text color={colors.muted}>{submissionMode(autoSubmit)}</Text>
       </Box>
     </Box>
   );
