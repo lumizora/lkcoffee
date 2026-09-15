@@ -10,7 +10,7 @@ export type IlinkMessage = {
   fromUserId: string;
   contextToken?: string;
   text?: string;
-  voice?: { transcript?: string; pcm?: Buffer };
+  voice?: { transcript: string };
 };
 
 export type OnIlinkMessage = (message: IlinkMessage) => Promise<string | undefined>;
@@ -23,10 +23,7 @@ export type IlinkRawMessage = {
   item_list?: Array<{
     type?: number;
     text_item?: { text?: string };
-    voice_item?: {
-      text?: string;
-      media?: { full_url?: string; encrypt_query_param?: string; aes_key?: string };
-    };
+    voice_item?: { text?: string };
   }>;
 };
 

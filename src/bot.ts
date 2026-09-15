@@ -1,4 +1,3 @@
-import { VolcengineStreamingASR } from "./asr/streaming";
 import { CoffeeAgent } from "./coffee-agent";
 import { listenIlink } from "./ilink/client";
 import { loadIlinkAccount } from "./ilink/storage";
@@ -7,12 +6,11 @@ import type { IlinkMessage } from "./ilink/types";
 type AgentReply = { text: string; qrCodeUrl?: string };
 type BotDependencies = {
   ask: (userId: string, text: string) => Promise<AgentReply>;
-  transcribe?: (pcm: Uint8Array) => Promise<string>;
 };
 
-export function createBotHandler({ ask, transcribe }: BotDependencies) {
+export function createBotHandler({ ask }: BotDependencies) {
   return async (message: IlinkMessage): Promise<string> => {
-    const text = message.text ?? message.voice?.transcript ?? (message.voice?.pcm && transcribe ? await transcribe(message.voice.pcm) : "");
+    const text = message.text ?? message.voice?.transcript ?? "";
     if (!text) return "收到语音，但没有可用的转写内容。";
     const reply = await ask(message.fromUserId, text);
     return reply.qrCodeUrl ? `${reply.text}\n支付链接：${reply.qrCodeUrl}` : reply.text;
@@ -25,7 +23,6 @@ async function main() {
   if (!apiKey) throw new Error("缺少 DEEPSEEK_API_KEY");
   if (!token) throw new Error("缺少 LUCKIN_MCP_TOKEN");
   const account = await loadIlinkAccount();
-  let asr: VolcengineStreamingASR | undefined;
   const agents = new Map<string, CoffeeAgent>();
   const handler = createBotHandler({
     ask: async (userId, text) => {
@@ -41,14 +38,6 @@ async function main() {
         agents.set(userId, agent);
       }
       return agent.ask(text);
-    },
-    transcribe: async (pcm) => {
-      asr ??= new VolcengineStreamingASR({
-        apiKey: process.env.VOLCENGINE_API_KEY,
-        resourceId: process.env.VOLCENGINE_RESOURCE_ID,
-        url: process.env.VOLCENGINE_ASR_URL,
-      });
-      return (await asr.transcribePcm(pcm)).text;
     },
   });
   const controller = new AbortController();

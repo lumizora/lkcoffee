@@ -107,15 +107,6 @@ test("encodes Uint8Array microphone frames as raw PCM", async () => {
   await session.finish().catch(() => {});
 });
 
-test("transcribes one PCM buffer through the normal streaming session", async () => {
-  const asr = new VolcengineStreamingASR({
-    apiKey: "test-key",
-    connect: (() => new FakeSocket()) as never,
-  });
-
-  assert.equal((await asr.transcribePcm(Buffer.from([1, 2, 3]))).text, "确认下单");
-});
-
 test("rejects a final response without speech", async () => {
   const asr = new VolcengineStreamingASR({
     apiKey: "test-key",

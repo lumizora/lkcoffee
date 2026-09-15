@@ -18,18 +18,6 @@ test("bot uses the voice transcript and returns CoffeeAgent output", async () =>
   assert.deepEqual(asked, ["wx-1:附近门店"]);
 });
 
-test("bot transcribes PCM when iLink does not provide text", async () => {
-  const handle = createBotHandler({
-    ask: async (_userId, text) => ({ text }),
-    transcribe: async (pcm) => {
-      assert.deepEqual(pcm, Buffer.from("pcm"));
-      return "一杯冰美式";
-    },
-  });
-
-  assert.equal(await handle({ fromUserId: "wx-1", voice: { pcm: Buffer.from("pcm") } }), "一杯冰美式");
-});
-
 test("bot includes the payment link in its text reply", async () => {
   const handle = createBotHandler({
     ask: async () => ({ text: "订单已创建。", qrCodeUrl: "https://pay.example.test/order" }),

@@ -4,15 +4,15 @@
 
 **Goal:** Run the existing Luckin Coffee agent as a WeChat iLink ClawBot without a new QR login.
 
-**Architecture:** A small `src/ilink/` transport owns persisted-session loading, protocol requests, long polling, and text replies. `src/bot.ts` creates one `CoffeeAgent` per WeChat user, prefers iLink voice transcripts, and sends replies using the inbound `context_token`. Voice without a transcript is decrypted, converted to 16 kHz mono PCM through installed `ffmpeg`, and sent to the existing streaming ASR.
+**Architecture:** A small `src/ilink/` transport owns persisted-session loading, protocol requests, long polling, and text replies. `src/bot.ts` creates one `CoffeeAgent` per WeChat user, uses iLink voice transcripts when supplied, and sends replies using the inbound `context_token`. Voice without a transcript is not processed.
 
-**Tech Stack:** Bun, TypeScript, native `fetch`/`crypto`/`fs`, existing `ws`, installed `ffmpeg`, DeepSeek, Luckin MCP, iLink HTTP API.
+**Tech Stack:** Bun, TypeScript, native `fetch`/`crypto`/`fs`, existing `ws`, DeepSeek, Luckin MCP, iLink HTTP API.
 
 **Spec:** `docs/superpowers/specs/2026-09-15-ilink-clawbot-design.md`
 
 ## Global Constraints
 
-- Add no package dependency; `ffmpeg` is already a documented project prerequisite.
+- Add no package dependency.
 - Read the existing session from `/Users/passer/Downloads/bun-ilink-clawbot-demo/.data` by default; allow `ILINK_DATA_DIR` to override it.
 - Never copy, print, stage, or commit bot tokens, cursor values, decrypted media, or `.env` contents.
 - Do not run Ink, macOS microphone/location code, or TTS from `bun run bot`.
@@ -100,7 +100,9 @@ git commit -m "feat: add iLink bot transport"
 - Produces: `VolcengineStreamingASR.transcribePcm(audio: Uint8Array): Promise<ASRTranscript>`.
 - Consumes: 16 kHz, mono, 16-bit signed little-endian PCM from `IlinkMessage.voice.pcm`.
 
-- [x] **Step 1: Write the failing ASR test**
+> **Scope amendment (2026-09-15):** Per user direction, do not implement voice-media download, decoding, or ASR fallback. Task 2 and every media/PCM instruction below are superseded; only iLink-provided voice transcripts are handled.
+
+- [ ] **Step 1: Write the failing ASR test**
 
 ```ts
 test("transcribes one PCM buffer through the normal streaming session", async () => {

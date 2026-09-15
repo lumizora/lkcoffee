@@ -75,7 +75,7 @@ bun run start
 bun run bot
 ```
 
-它不会启动麦克风、定位或 TTS。微信语音优先使用 iLink 提供的转写；没有转写时会使用豆包 ASR，因此还需配置 `VOLCENGINE_API_KEY`。默认直接读取演示项目的登录信息；如需使用其他会话目录，设置 `ILINK_DATA_DIR=/path/to/.data`。不要复制或提交该目录中的登录信息。
+它不会启动麦克风、定位或 TTS。微信语音仅使用 iLink 提供的转写；没有转写时不处理。默认直接读取演示项目的登录信息；如需使用其他会话目录，设置 `ILINK_DATA_DIR=/path/to/.data`。不要复制或提交该目录中的登录信息。
 
 ## 语音操作
 

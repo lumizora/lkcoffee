@@ -1,6 +1,5 @@
 import { baseInfo } from "./config";
 import { postIlink, type IlinkFetch } from "./http";
-import { downloadVoice } from "./media";
 import { loadCursor, saveCursor } from "./storage";
 import type { GetUpdatesResponse, IlinkAccount, IlinkMessage, IlinkRawMessage, OnIlinkMessage } from "./types";
 
@@ -17,12 +16,11 @@ function textFrom(message: IlinkRawMessage): string | undefined {
   return text || undefined;
 }
 
-async function voiceFrom(message: IlinkRawMessage, fetcher: IlinkFetch): Promise<IlinkMessage["voice"]> {
+function voiceFrom(message: IlinkRawMessage): IlinkMessage["voice"] {
   const voice = (message.item_list ?? []).find((item) => item.type === voiceItem)?.voice_item;
   if (!voice) return undefined;
   const transcript = voice.text?.trim();
-  if (transcript) return { transcript };
-  return voice.media ? downloadVoice(voice, fetcher) : undefined;
+  return transcript ? { transcript } : undefined;
 }
 
 function check(response: GetUpdatesResponse): GetUpdatesResponse {
@@ -55,7 +53,7 @@ export async function pollOnce(account: IlinkAccount, onMessage: OnIlinkMessage,
   if (response.get_updates_buf !== undefined) await saveCursor(response.get_updates_buf);
   for (const raw of response.msgs ?? []) {
     const text = textFrom(raw);
-    const voice = await voiceFrom(raw, fetcher);
+    const voice = voiceFrom(raw);
     if ((raw.message_type !== undefined && raw.message_type !== userMessage) || !raw.from_user_id || (!text && !voice)) continue;
     try {
       const message = { fromUserId: raw.from_user_id, contextToken: raw.context_token, text, voice };
