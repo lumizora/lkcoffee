@@ -18,7 +18,7 @@ type CoffeeAgentOptions = {
 };
 
 const mcpUrl = "https://gwmcp.lkcoffee.com/order/user/mcp";
-const instructions = "你是瑞幸咖啡语音助手。仅支持到店自取。查询门店后必须请用户确认门店。创建订单前只做一次用户确认：用户确认后调用 previewOrder；最终价格不高于预估价、商品明细一致且优惠券正常时，立即调用 createOrder，不要再次要求确认。若用户本轮要求查看实际到手价或最终价格，只调用 previewOrder 并展示价格，等待用户之后明确说“确认下单”再创建。用户明确要求取消订单时，直接调用 cancelOrder，不要额外要求终端确认。createOrder 必须原样传入 previewOrder 返回的 couponCodeList。不要编造门店、商品、价格或订单状态。回复会被实时语音播报：像真人说话一样自然、简短，优先一两句；只有门店候选、订单和价格等必要信息才分行列出。不要寒暄、重复用户的话或补充无关说明。回复用于纯文本终端：不要使用 Markdown，不要使用表格、粗体、标题、列表符号或代码标记。";
+const instructions = "你是瑞幸咖啡语音助手。仅支持到店自取。查询门店后必须请用户确认门店。选定门店不等于确认下单：选店后调用 previewOrder，展示商品和最终价格，再要求用户在之后单独明确回复“确认下单”或“确定下单”。只在这句明确确认后的下一轮调用 createOrder。用户本轮要求查看实际到手价或最终价格时，只调用 previewOrder 并展示价格。用户明确要求取消订单时，直接调用 cancelOrder，不要额外要求终端确认。createOrder 必须原样传入 previewOrder 返回的 couponCodeList。不要编造门店、商品、价格或订单状态。回复会被实时语音播报：像真人说话一样自然、简短，优先一两句；只有门店候选、订单和价格等必要信息才分行列出。不要寒暄、重复用户的话或补充无关说明。回复用于纯文本终端：不要使用 Markdown，不要使用表格、粗体、标题、列表符号或代码标记。";
 
 export class CoffeeAgent {
   private client: OpenAI;
@@ -47,6 +47,7 @@ export class CoffeeAgent {
     this.messages.push({ role: "user", content: text });
     let qrCodeUrl;
     const priceOnly = asksForPrice(text);
+    const confirmedOrder = this.previewed && confirmsOrder(text);
     for (let turns = 0; turns < 5; turns += 1) {
       const request: ChatCompletionCreateParamsNonStreaming & { thinking: { type: "enabled" } } = {
         model: this.model,
@@ -63,15 +64,13 @@ export class CoffeeAgent {
       }
       const toolCalls = message.tool_calls?.filter(isFunctionCall) ?? [];
       const create = toolCalls.find((call) => call.function.name === "createOrder");
-      if (create) {
-        if (!this.previewed) return { text: "请先确认门店和商品，再预览订单。" };
-        if (priceOnly) {
-          this.messages.push({ role: "system", content: "用户本轮只查看最终价格。基于 previewOrder 结果报告实际到手价，不要创建订单或调用任何工具。" });
-          continue;
-        }
-      }
+      const blockCreate = Boolean(create) && (!confirmedOrder || priceOnly);
       this.messages.push(message);
       for (const call of toolCalls) {
+        if (call.function.name === "createOrder" && blockCreate) {
+          this.messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ error: "需要在预览后单独确认下单" }) });
+          continue;
+        }
         const result = await this.callTool(call.function.name, JSON.parse(call.function.arguments));
         const cancelReason = call.function.name === "cancelOrder" && findCancelFailure(result);
         if (call.function.name === "previewOrder") this.previewed = true;
@@ -85,6 +84,12 @@ export class CoffeeAgent {
           this.messages.push({ role: "assistant", content });
           return { text: content };
         }
+      }
+      if (blockCreate) {
+        this.messages.push({ role: "system", content: priceOnly
+          ? "用户本轮只查看最终价格。基于 previewOrder 结果报告实际到手价，不要创建订单或调用任何工具。"
+          : "订单尚未得到明确确认。基于预览结果展示商品和价格，要求用户之后单独回复“确认下单”或“确定下单”。不得创建订单或调用任何工具。" });
+        continue;
       }
     }
     throw new Error("瑞幸助手调用次数过多");
@@ -129,6 +134,10 @@ function findQrCode(value: unknown): string | undefined {
 
 function asksForPrice(text: string): boolean {
   return /实际.*(?:到手价|价格|价)|最终(?:到手价|价格|价|应付)|到手价|看看?(?:实际|最终)?价格/.test(text);
+}
+
+function confirmsOrder(text: string): boolean {
+  return /^(?:确认|确定)下单$/.test(text.replace(/[\s，。！？!?]/g, ""));
 }
 
 function findCancelFailure(value: unknown): string | undefined {

@@ -37,42 +37,48 @@ test("coffee agent turns an MCP tool result into a spoken reply", async () => {
   assert.equal((await agent.ask("附近有什么瑞幸？")).text, "附近有 1 家瑞幸，请选择门店。");
 });
 
-test("coffee agent creates the previewed order after one voice confirmation", async () => {
+test("coffee agent requires a later explicit confirmation after previewing a selected store", async () => {
   let modelCalls = 0;
   let orderCreated = false;
   const client = { chat: { completions: { create: async (request: ModelRequest) => {
     modelCalls += 1;
     if (modelCalls === 1) return { choices: [{ message: { tool_calls: [{
       id: "preview-1", type: "function", function: { name: "previewOrder", arguments: '{"deptId":1,"productList":[]}' },
-    }] } }] };
-    if (modelCalls === 3) {
-      assert.equal(request.messages.at(-1)?.role, "tool");
-      return { choices: [{ message: { content: "订单已创建，请扫码支付。" } }] };
-    }
-    if (modelCalls === 4) {
-      assert.equal(request.messages.some((message) => message.content?.includes("order-1")), true);
-      return { choices: [{ message: { content: "我会查询订单 order-1。" } }] };
-    }
-    return { choices: [{ message: { tool_calls: [{
+    }, {
       id: "create-1", type: "function", function: { name: "createOrder", arguments: '{"deptId":1,"productList":[]}' },
     }] } }] };
+    if (modelCalls === 2) {
+      return { choices: [{ message: { content: "鲁商中心店，橙 C 美式大杯冰，实付 13.9 元。请回复“确认下单”。" } }] };
+    }
+    if (modelCalls === 4) {
+      return { choices: [{ message: { content: "订单已创建，请扫码支付。" } }] };
+    }
+    return { choices: [{ message: { tool_calls: [{
+      id: "create-2", type: "function", function: { name: "createOrder", arguments: '{"deptId":1,"productList":[]}' },
+    }] } }] };
   } } } };
+  const calledTools: string[] = [];
   const fetch = async (_url: string, options?: RequestInit) => {
     const request = body(options);
     if (request.method === "tools/list") return new Response(JSON.stringify({ result: { tools: ["previewOrder", "createOrder"].map((name) => ({
       name, description: name, inputSchema: { type: "object", properties: {} },
     })) } }));
+    calledTools.push(request.params.name!);
     if (request.params.name === "previewOrder") return new Response(JSON.stringify({ result: { content: [{ type: "text", text: "预览成功" }] } }));
     orderCreated = true;
     return new Response(JSON.stringify({ result: { content: [{ type: "text", text: JSON.stringify({ orderId: "order-1", payOrderQrCodeUrl: "https://pay.example/qr" }) }] } }));
   };
   const agent = new CoffeeAgent({ client: client as never, fetch, token: "test-token" });
 
+  const preview = await agent.ask("鲁商");
+  assert.equal(preview.text, "鲁商中心店，橙 C 美式大杯冰，实付 13.9 元。请回复“确认下单”。");
+  assert.deepEqual(calledTools, ["previewOrder"]);
+  assert.equal(orderCreated, false);
+
   const paid = await agent.ask("确认下单");
   assert.equal(orderCreated, true);
-  assert.equal(modelCalls, 3);
+  assert.equal(modelCalls, 4);
   assert.equal(paid.qrCodeUrl, "https://pay.example/qr");
-  assert.equal((await agent.ask("查询我的订单")).text, "我会查询订单 order-1。");
 });
 
 test("coffee agent sends the selected DeepSeek thinking effort", async () => {
