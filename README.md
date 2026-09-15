@@ -67,6 +67,16 @@ bun run start
 
 首次启动会请求 macOS 定位权限。允许后可直接说“帮我看附近有哪些门店”。
 
+### 微信 ClawBot
+
+已在 `/Users/passer/Downloads/bun-ilink-clawbot-demo/.data` 登录过 iLink 后，保持现有 `.env` 中的 `DEEPSEEK_API_KEY` 和 `LUCKIN_MCP_TOKEN`，执行：
+
+```bash
+bun run bot
+```
+
+它不会启动麦克风、定位或 TTS。微信语音优先使用 iLink 提供的转写；没有转写时会使用豆包 ASR，因此还需配置 `VOLCENGINE_API_KEY`。默认直接读取演示项目的登录信息；如需使用其他会话目录，设置 `ILINK_DATA_DIR=/path/to/.data`。不要复制或提交该目录中的登录信息。
+
 ## 语音操作
 
 | 按键 | 操作 |

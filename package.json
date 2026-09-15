@@ -5,6 +5,7 @@
   "scripts": {
     "prestart": "bun run build:native",
     "start": "bun --env-file=.env src/ink.tsx",
+    "bot": "bun --env-file=.env src/bot.ts",
     "build:native": "zsh scripts/build-native.sh",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
