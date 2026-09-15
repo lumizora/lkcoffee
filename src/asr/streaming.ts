@@ -40,6 +40,12 @@ export class VolcengineStreamingASR {
     socket.send(fullRequest(1));
     return session;
   }
+
+  async transcribePcm(audio: Uint8Array): Promise<ASRTranscript> {
+    const session = await this.start();
+    session.write(audio);
+    return session.finish();
+  }
 }
 
 class Session {
