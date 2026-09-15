@@ -2,6 +2,7 @@ import { CoffeeAgent } from "./coffee-agent";
 import { loginIlink } from "./ilink/auth";
 import { listenIlink } from "./ilink/client";
 import { loadIlinkAccount } from "./ilink/storage";
+import { locate, type Location } from "./location";
 import type { IlinkMessage } from "./ilink/types";
 import type { IlinkAccount } from "./ilink/types";
 
@@ -23,12 +24,17 @@ export async function ensureIlinkAccount(load: () => Promise<IlinkAccount | unde
   return await load() ?? login();
 }
 
+export async function optionalLocation(getLocation: () => Promise<Location> = locate): Promise<Location | undefined> {
+  try { return await getLocation(); } catch { return undefined; }
+}
+
 async function main() {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   const token = process.env.LUCKIN_MCP_TOKEN;
   if (!apiKey) throw new Error("缺少 DEEPSEEK_API_KEY");
   if (!token) throw new Error("缺少 LUCKIN_MCP_TOKEN");
   const account = await ensureIlinkAccount(loadIlinkAccount, loginIlink);
+  const location = await optionalLocation();
   const agents = new Map<string, CoffeeAgent>();
   const handler = createBotHandler({
     ask: async (userId, text) => {
@@ -40,6 +46,7 @@ async function main() {
           model: process.env.DEEPSEEK_MODEL,
           token,
           url: process.env.LUCKIN_MCP_URL,
+          location,
         });
         agents.set(userId, agent);
       }

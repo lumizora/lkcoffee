@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBotHandler, ensureIlinkAccount } from "../src/bot";
+import { createBotHandler, ensureIlinkAccount, optionalLocation } from "../src/bot";
 
 test("bot uses the voice transcript and returns CoffeeAgent output", async () => {
   const asked: string[] = [];
@@ -38,4 +38,12 @@ test("uses a saved iLink account without logging in", async () => {
     account,
   );
   assert.equal(loggedIn, false);
+});
+
+test("uses macOS coordinates when location is available", async () => {
+  assert.deepEqual(await optionalLocation(async () => ({ latitude: 31.2304, longitude: 121.4737 })), { latitude: 31.2304, longitude: 121.4737 });
+});
+
+test("starts without coordinates when macOS location is unavailable", async () => {
+  assert.equal(await optionalLocation(async () => { throw new Error("denied"); }), undefined);
 });
