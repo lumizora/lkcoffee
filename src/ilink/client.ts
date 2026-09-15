@@ -45,12 +45,12 @@ export async function sendIlinkText(account: IlinkAccount, message: IlinkMessage
   if (response.ret) throw new Error(`iLink sendmessage 失败：${response.errmsg ?? response.ret}`);
 }
 
-export async function pollOnce(account: IlinkAccount, onMessage: OnIlinkMessage, fetcher: IlinkFetch = fetch): Promise<void> {
+export async function pollOnce(account: IlinkAccount, onMessage: OnIlinkMessage, fetcher: IlinkFetch = fetch, root?: string): Promise<void> {
   const response = check(JSON.parse(await postIlink(account, "ilink/bot/getupdates", {
-    get_updates_buf: await loadCursor(),
+    get_updates_buf: await loadCursor(root),
     base_info: baseInfo(),
   }, fetcher)) as GetUpdatesResponse);
-  if (response.get_updates_buf !== undefined) await saveCursor(response.get_updates_buf);
+  if (response.get_updates_buf !== undefined) await saveCursor(response.get_updates_buf, root);
   for (const raw of response.msgs ?? []) {
     const text = textFrom(raw);
     const voice = voiceFrom(raw);
