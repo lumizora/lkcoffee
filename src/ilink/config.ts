@@ -1,4 +1,7 @@
-export const dataDir = () => process.env.ILINK_DATA_DIR?.trim() || "/Users/passer/Downloads/bun-ilink-clawbot-demo/.data";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+export const dataDir = () => join(homedir(), ".lkcoffee");
 export const channelVersion = process.env.ILINK_CHANNEL_VERSION?.trim() || "2.4.8";
 export const botAgent = process.env.ILINK_BOT_AGENT?.trim() || "VoiceCoffee/1.0";
 

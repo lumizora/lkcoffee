@@ -23,6 +23,7 @@ async function main() {
   if (!apiKey) throw new Error("缺少 DEEPSEEK_API_KEY");
   if (!token) throw new Error("缺少 LUCKIN_MCP_TOKEN");
   const account = await loadIlinkAccount();
+  if (!account) throw new Error("未找到 iLink 登录信息");
   const agents = new Map<string, CoffeeAgent>();
   const handler = createBotHandler({
     ask: async (userId, text) => {
