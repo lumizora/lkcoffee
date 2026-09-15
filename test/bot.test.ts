@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBotHandler } from "../src/bot";
+import { createBotHandler, ensureIlinkAccount } from "../src/bot";
 
 test("bot uses the voice transcript and returns CoffeeAgent output", async () => {
   const asked: string[] = [];
@@ -24,4 +24,18 @@ test("bot includes the payment link in its text reply", async () => {
   });
 
   assert.equal(await handle({ fromUserId: "wx-1", text: "确认下单" }), "订单已创建。\n支付链接：https://pay.example.test/order");
+});
+
+test("uses a saved iLink account without logging in", async () => {
+  let loggedIn = false;
+  const account = { botToken: "token", botId: "bot", baseUrl: "https://ilinkai.weixin.qq.com" };
+
+  assert.equal(
+    await ensureIlinkAccount(async () => account, async () => {
+      loggedIn = true;
+      return account;
+    }),
+    account,
+  );
+  assert.equal(loggedIn, false);
 });

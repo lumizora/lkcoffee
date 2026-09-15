@@ -4,6 +4,8 @@ import { join } from "node:path";
 export const dataDir = () => join(homedir(), ".lkcoffee");
 export const channelVersion = process.env.ILINK_CHANNEL_VERSION?.trim() || "2.4.8";
 export const botAgent = process.env.ILINK_BOT_AGENT?.trim() || "VoiceCoffee/1.0";
+export const botType = process.env.ILINK_BOT_TYPE?.trim() || "3";
+export const loginBaseUrl = "https://ilinkai.weixin.qq.com";
 
 export function baseInfo() {
   return { channel_version: channelVersion, bot_agent: botAgent };

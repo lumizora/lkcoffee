@@ -1,7 +1,9 @@
 import { CoffeeAgent } from "./coffee-agent";
+import { loginIlink } from "./ilink/auth";
 import { listenIlink } from "./ilink/client";
 import { loadIlinkAccount } from "./ilink/storage";
 import type { IlinkMessage } from "./ilink/types";
+import type { IlinkAccount } from "./ilink/types";
 
 type AgentReply = { text: string; qrCodeUrl?: string };
 type BotDependencies = {
@@ -17,13 +19,16 @@ export function createBotHandler({ ask }: BotDependencies) {
   };
 }
 
+export async function ensureIlinkAccount(load: () => Promise<IlinkAccount | undefined>, login: () => Promise<IlinkAccount>): Promise<IlinkAccount> {
+  return await load() ?? login();
+}
+
 async function main() {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   const token = process.env.LUCKIN_MCP_TOKEN;
   if (!apiKey) throw new Error("缺少 DEEPSEEK_API_KEY");
   if (!token) throw new Error("缺少 LUCKIN_MCP_TOKEN");
-  const account = await loadIlinkAccount();
-  if (!account) throw new Error("未找到 iLink 登录信息");
+  const account = await ensureIlinkAccount(loadIlinkAccount, loginIlink);
   const agents = new Map<string, CoffeeAgent>();
   const handler = createBotHandler({
     ask: async (userId, text) => {
@@ -45,7 +50,7 @@ async function main() {
   const stop = () => controller.abort();
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  console.log("[iLink] 已读取已有登录信息，正在启动长轮询。");
+  console.log("[iLink] 登录信息已就绪，正在启动长轮询。");
   await listenIlink(account, handler, controller.signal);
 }
 

@@ -69,13 +69,13 @@ bun run start
 
 ### 微信 ClawBot
 
-已在 `/Users/passer/Downloads/bun-ilink-clawbot-demo/.data` 登录过 iLink 后，保持现有 `.env` 中的 `DEEPSEEK_API_KEY` 和 `LUCKIN_MCP_TOKEN`，执行：
+保持现有 `.env` 中的 `DEEPSEEK_API_KEY` 和 `LUCKIN_MCP_TOKEN`，执行：
 
 ```bash
 bun run bot
 ```
 
-它不会启动麦克风、定位或 TTS。微信语音仅使用 iLink 提供的转写；没有转写时不处理。默认直接读取演示项目的登录信息；如需使用其他会话目录，设置 `ILINK_DATA_DIR=/path/to/.data`。不要复制或提交该目录中的登录信息。
+首次运行会在终端显示 iLink 登录二维码；确认后凭据保存在 `~/.lkcoffee/account.json`（0600），以后启动不会再次登录。它不会启动麦克风、定位或 TTS。微信语音仅使用 iLink 提供的转写；没有转写时不处理。不要复制或提交本地凭据。
 
 ## 语音操作
 
